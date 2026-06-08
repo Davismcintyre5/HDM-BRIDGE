@@ -18,6 +18,7 @@ const adminAuditLogSchema = new mongoose.Schema(
       required: true,
       enum: [
         'user',
+        'users',
         'organization',
         'payment',
         'payment_method',

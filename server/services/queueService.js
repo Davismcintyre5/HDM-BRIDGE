@@ -1,5 +1,4 @@
 const Queue = require('bull');
-const emailService = require('./emailService');
 const logger = require('../utils/logger');
 
 class QueueService {
@@ -9,65 +8,36 @@ class QueueService {
   }
 
   initQueue() {
-    this.emailQueue = new Queue('email-sending', process.env.REDIS_URL, {
-      defaultJobOptions: {
-        attempts: 5,
-        backoff: {
-          type: 'exponential',
-          delay: 2000,
+    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    const isUpstash = redisUrl.includes('upstash.io');
+
+    this.emailQueue = new Queue('email-sending', redisUrl, {
+      redis: {
+        tls: isUpstash ? { rejectUnauthorized: false } : undefined,
+        maxRetriesPerRequest: null,
+        retryStrategy: (times) => {
+          if (times > 10) return null;
+          return Math.min(times * 500, 5000);
         },
-        removeOnComplete: 100,
-        removeOnFail: 500,
+        connectTimeout: 15000,
+      },
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: 'fixed', delay: 5000 },
+        removeOnComplete: 50,
+        removeOnFail: 200,
         timeout: 30000,
       },
-      limiter: {
-        max: 100,
-        duration: 5000,
-      },
-    });
-
-    this.emailQueue.on('completed', (job) => {
-      logger.info(`Job ${job.id} completed: ${job.data.messageId}`);
-    });
-
-    this.emailQueue.on('failed', (job, error) => {
-      logger.error(`Job ${job.id} failed: ${error.message}`);
     });
 
     this.emailQueue.on('error', (error) => {
-      logger.error(`Queue error: ${error.message}`);
-    });
-
-    this.emailQueue.process('send-email', async (job) => {
-      return this.processEmailJob(job);
-    });
-
-    this.emailQueue.process('send-bulk-email', async (job) => {
-      return this.processBulkEmailJob(job);
+      if (error.message.includes('ECONNRESET') || error.message.includes('ETIMEDOUT')) {
+        return;
+      }
+      logger.error('Queue error: ' + error.message);
     });
 
     logger.info('✅ Email Queue Initialized');
-  }
-
-  async processEmailJob(job) {
-    const { emailData } = job.data;
-    return emailService.sendEmail(emailData);
-  }
-
-  async processBulkEmailJob(job) {
-    const { emails } = job.data;
-    const results = [];
-
-    for (const email of emails) {
-      const childJob = await this.emailQueue.add('send-email', {
-        emailData: email,
-      }, {
-        priority: email.priority === 'high' ? 1 : 5,
-      });
-      results.push({ email: email.to, jobId: childJob.id });
-    }
-
-    return results;
   }
 
   async addToQueue(emailData, priority = 'normal') {
@@ -86,12 +56,7 @@ class QueueService {
   }
 
   async addBulkToQueue(emails) {
-    const job = await this.emailQueue.add(
-      'send-bulk-email',
-      { emails },
-      { priority: 3 }
-    );
-
+    const job = await this.emailQueue.add('send-bulk-email', { emails }, { priority: 3 });
     return job;
   }
 
@@ -100,12 +65,10 @@ class QueueService {
     if (!job) return null;
 
     const state = await job.getState();
-    const progress = job._progress;
-
     return {
       id: job.id,
       state,
-      progress,
+      progress: job._progress,
       attempts: job.attemptsMade,
       data: job.data,
       processedOn: job.processedOn,

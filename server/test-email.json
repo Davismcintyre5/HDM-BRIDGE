@@ -1,8 +1,0 @@
-{
-  "from": "davismcintyre5@gmail.com",
-  "fromName": "HDM Test",
-  "to": "davixhdm@gmail.com",
-  "subject": "Test from HDM BRIDGE",
-  "htmlBody": "<h1>It works</h1><p>Sent via HDM BRIDGE API</p>",
-  "textBody": "It works - Sent via HDM BRIDGE API"
-}

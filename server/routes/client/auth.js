@@ -7,7 +7,7 @@ router.post('/register', authLimiter, register);
 router.post('/login', authLimiter, login);
 router.post('/forgot-password', authLimiter, forgotPassword);
 router.post('/reset-password/:token', authLimiter, resetPassword);
-router.get('/verify/:token', verifyEmail);
+router.post('/verify/:token', verifyEmail);
 router.get('/me', auth, getMe);
 router.put('/me', auth, updateProfile);
 router.put('/change-password', auth, changePassword);

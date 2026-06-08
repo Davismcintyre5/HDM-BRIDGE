@@ -13,13 +13,15 @@ export default function VerifyEmail() {
 
   const verify = async () => {
     try {
-      const res = await fetch(`${API_URL}/auth/verify/${token}`);
+      const res = await fetch(`${API_URL}/auth/verify/${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
       const data = await res.json();
-      
+
       if (data.success) {
         setStatus('success');
       } else if (data.error?.includes('Invalid or expired')) {
-        // Token was already used or expired - but user might already be verified
         setStatus('already-done');
       } else {
         setStatus('error');

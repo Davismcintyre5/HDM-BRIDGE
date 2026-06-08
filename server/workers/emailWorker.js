@@ -1,7 +1,3 @@
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
-
-const connectDB = require('../config/database');
-const { connectRedis } = require('../config/redis');
 const axios = require('axios');
 const EmailLog = require('../models/client/EmailLog');
 
@@ -23,10 +19,7 @@ async function sendWithFallback(payload, attempt = 0) {
 
   try {
     const response = await axios.post(BREVO_API_URL, payload, {
-      headers: {
-        'api-key': apiKey,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     });
     return response;
   } catch (error) {
@@ -116,21 +109,27 @@ async function processEmailJob(job) {
 
 async function startWorker() {
   try {
-    await connectDB();
-    await connectRedis();
-
     if (BREVO_KEYS.length === 0) {
-      console.error('❌ No BREVO_API_KEY configured in .env');
-      process.exit(1);
+      console.error('❌ No BREVO_API_KEY configured');
+      return;
     }
 
-    console.log('✅ Brevo accounts configured: ' + BREVO_KEYS.length);
-    BREVO_KEYS.forEach((key, i) => {
-      console.log('  Account ' + (i + 1) + ': ' + key.substring(0, 10) + '...');
-    });
+    console.log('✅ Brevo accounts: ' + BREVO_KEYS.length);
+
+    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    const isUpstash = redisUrl.includes('upstash.io');
 
     const Queue = require('bull');
-    const emailQueue = new Queue('email-sending', process.env.REDIS_URL, {
+    const emailQueue = new Queue('email-sending', redisUrl, {
+      redis: {
+        tls: isUpstash ? { rejectUnauthorized: false } : undefined,
+        maxRetriesPerRequest: null,
+        retryStrategy: (times) => {
+          if (times > 10) return null;
+          return Math.min(times * 500, 5000);
+        },
+        connectTimeout: 15000,
+      },
       defaultJobOptions: {
         attempts: 3,
         backoff: { type: 'fixed', delay: 5000 },
@@ -150,15 +149,20 @@ async function startWorker() {
       console.error('Job failed: ' + err.message);
     });
 
+    emailQueue.on('error', function(err) {
+      if (err.message.includes('ECONNRESET') || err.message.includes('ETIMEDOUT')) {
+        return;
+      }
+      console.error('Queue error:', err.message);
+    });
+
+    // Clear any stuck jobs from previous runs
+    await emailQueue.obliterate({ force: true });
     console.log('📨 Email Worker Started');
 
   } catch (error) {
     console.error('Worker start failed:', error.message);
-    process.exit(1);
   }
 }
 
-process.on('SIGTERM', function() { process.exit(0); });
-process.on('SIGINT', function() { process.exit(0); });
-
-startWorker();
+module.exports = startWorker;

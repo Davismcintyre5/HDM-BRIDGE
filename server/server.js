@@ -15,13 +15,12 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
-const { fork } = require('child_process');
-const path = require('path');
 const connectDB = require('./config/database');
 const { connectRedis, getRedisClient } = require('./config/redis');
 const routes = require('./routes/index');
 const { errorHandler } = require('./middleware/common/errorHandler');
 const logger = require('./utils/logger');
+const startEmailWorker = require('./workers/emailWorker');
 
 const app = express();
 
@@ -38,9 +37,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(compression());
 
 if (process.env.NODE_ENV === 'production') {
-  app.use(morgan('combined', {
-    stream: { write: (message) => logger.info(message.trim()) }
-  }));
+  app.use(morgan('combined', { stream: { write: (message) => logger.info(message.trim()) } }));
 } else {
   app.use(morgan('dev'));
 }
@@ -166,20 +163,7 @@ async function start() {
       console.log('   App Name:    ' + (process.env.APP_NAME || 'HDM BRIDGE'));
       console.log('');
 
-      const workerPath = path.join(__dirname, 'workers', 'emailWorker.js');
-      const worker = fork(workerPath, [], { silent: true });
-
-      worker.stdout.on('data', (data) => {
-        console.log('[Worker] ' + data.toString().trim());
-      });
-
-      worker.stderr.on('data', (data) => {
-        console.error('[Worker] ' + data.toString().trim());
-      });
-
-      worker.on('close', (code) => {
-        console.log('⚠️  Email worker exited with code ' + code);
-      });
+      startEmailWorker();
 
       console.log('   ✨ Ready to send emails!');
       console.log('');
@@ -208,7 +192,6 @@ async function gracefulShutdown(signal) {
 
     console.log('\n👋 Goodbye!\n');
     process.exit(0);
-
   } catch (error) {
     console.error('\n❌ Error during shutdown:', error.message);
     process.exit(1);
