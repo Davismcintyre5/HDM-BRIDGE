@@ -9,4 +9,7 @@ router.post('/send', apiKeyAuth, emailSendLimiter, tenantIsolation, sendEmail);
 router.post('/send-bulk', apiKeyAuth, emailSendLimiter, tenantIsolation, sendBulkEmails);
 router.get('/status/:messageId', auth, tenantIsolation, getEmailStatus);
 
+// Add JWT-authenticated route for dashboard compose
+router.post('/compose', auth, tenantIsolation, emailSendLimiter, sendEmail);
+
 module.exports = router;

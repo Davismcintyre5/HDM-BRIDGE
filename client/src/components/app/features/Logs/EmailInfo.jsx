@@ -1,5 +1,5 @@
-import StatusBadge from '../../ui/StatusBadge';
-import { formatDate } from '../../../utils/helpers';
+import StatusBadge from '@components/app/ui/StatusBadge';
+import { formatDate } from '@utils/helpers';
 
 export default function EmailInfo({ log }) {
   return (

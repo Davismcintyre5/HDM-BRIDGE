@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
-import PageHeader from '../../components/app/ui/PageHeader';
-import DataTable from '../../components/app/ui/DataTable';
-import CopyButton from '../../components/app/ui/CopyButton';
-import EmptyState from '../../components/app/ui/EmptyState';
-import LoadingSpinner from '../../components/app/ui/LoadingSpinner';
-import CreateApiKeyModal from '../../components/app/features/ApiKeys/CreateApiKeyModal';
-import ConfirmDialog from '../../components/app/ui/ConfirmDialog';
-import { apiKeysAPI } from '../../api/apiKeys';
-import { formatDate } from '../../utils/helpers';
+import PageHeader from '@components/app/ui/PageHeader';
+import EmptyState from '@components/app/ui/EmptyState';
+import LoadingSpinner from '@components/app/ui/LoadingSpinner';
+import CreateApiKeyModal from '@components/app/features/ApiKeys/CreateApiKeyModal';
+import ConfirmDialog from '@components/app/ui/ConfirmDialog';
+import { apiKeysAPI } from '@api/apiKeys';
+import { formatDate } from '@utils/helpers';
 import { FiKey, FiPlus } from 'react-icons/fi';
 
 export default function ApiKeys() {
@@ -35,8 +33,6 @@ export default function ApiKeys() {
     }
   };
 
-  const columns = ['Name', 'Key', 'Scopes', 'Last Used', 'Created', ''];
-
   if (loading) return <LoadingSpinner />;
 
   return (
@@ -53,14 +49,19 @@ export default function ApiKeys() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                {columns.map((c, i) => <th key={i} className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">{c}</th>)}
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Name</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Key</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Scopes</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Last Used</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Created</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase"></th>
               </tr>
             </thead>
             <tbody>
               {keys.map((key) => (
                 <tr key={key._id} className="border-b border-gray-50">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">{key.name}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500 font-mono">{key.prefix}... <CopyButton text={key.prefix} /></td>
+                  <td className="px-4 py-3 text-sm text-gray-500 font-mono">{key.prefix}... <span className="text-xs text-gray-400">(hidden)</span></td>
                   <td className="px-4 py-3"><span className="badge bg-blue-100 text-blue-700">{key.scopes?.join(', ') || 'send'}</span></td>
                   <td className="px-4 py-3 text-sm text-gray-500">{key.lastUsed ? formatDate(key.lastUsed) : 'Never'}</td>
                   <td className="px-4 py-3 text-sm text-gray-500">{formatDate(key.createdAt)}</td>
@@ -73,7 +74,7 @@ export default function ApiKeys() {
           </table>
         </div>
       )}
-      <CreateApiKeyModal isOpen={showCreate} onClose={() => setShowCreate(false)} onCreated={() => { fetchKeys(); setShowCreate(false); }} />
+      <CreateApiKeyModal isOpen={showCreate} onClose={() => setShowCreate(false)} />
       <ConfirmDialog isOpen={!!revokeId} onClose={() => setRevokeId(null)} onConfirm={handleRevoke} title="Revoke API Key" message="This key will no longer work. This action cannot be undone." confirmText="Revoke" danger />
     </>
   );

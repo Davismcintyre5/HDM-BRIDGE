@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import PageHeader from '../../components/app/ui/PageHeader';
-import { emailsAPI } from '../../api/emails';
-import { useApp } from '../../context/AppContext';
+import PageHeader from '@components/app/ui/PageHeader';
+import { emailsAPI } from '@api/emails';
+import { useApp } from '@context/AppContext';
 
 export default function Compose() {
   const { showToast } = useApp();
@@ -12,7 +12,7 @@ export default function Compose() {
     e.preventDefault();
     setLoading(true);
     try {
-      await emailsAPI.send(form);
+      await emailsAPI.compose(form);
       showToast('Email sent!', 'success');
       setForm({ from: '', fromName: '', to: '', subject: '', htmlBody: '' });
     } catch (err) {

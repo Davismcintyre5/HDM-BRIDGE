@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import ChatToggleButton from './ChatToggleButton';
 import ChatPanel from './ChatPanel';
-import { useChat } from '../../../hooks/useChat';
+import { useChat } from '@hooks/useChat';
 
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
@@ -10,15 +10,7 @@ export default function ChatWidget() {
   return (
     <>
       <ChatToggleButton isOpen={isOpen} onClick={() => setIsOpen(!isOpen)} />
-      {isOpen && (
-        <ChatPanel
-          messages={messages}
-          loading={loading}
-          onSend={sendMessage}
-          onClose={() => setIsOpen(false)}
-          onClear={clearChat}
-        />
-      )}
+      {isOpen && <ChatPanel messages={messages} loading={loading} onSend={(msg) => sendMessage(msg, true)} onClose={() => setIsOpen(false)} onClear={clearChat} />}
     </>
   );
 }

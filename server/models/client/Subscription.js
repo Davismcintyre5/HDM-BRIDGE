@@ -15,15 +15,7 @@ const subscriptionSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: [
-        'active',
-        'past_due',
-        'canceled',
-        'incomplete',
-        'incomplete_expired',
-        'trialing',
-        'paused',
-      ],
+      enum: ['active', 'past_due', 'canceled', 'incomplete', 'incomplete_expired', 'trialing', 'paused'],
       default: 'active',
     },
     currentPeriodStart: {
@@ -65,6 +57,7 @@ const subscriptionSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    collection: 'subscriptions',
   }
 );
 

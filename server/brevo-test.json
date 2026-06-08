@@ -1,0 +1,13 @@
+{
+  "sender": {
+    "name": "HDM BRIDGE",
+    "email": "davismcintyre5@gmail.com"
+  },
+  "to": [
+    {
+      "email": "davixhdm@gmail.com"
+    }
+  ],
+  "subject": "HTTP API Test",
+  "htmlContent": "<h1>Works via HTTPS</h1>"
+}

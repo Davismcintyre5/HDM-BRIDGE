@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useAuth } from '../../../context/AuthContext';
+import { useAuth } from '@context/AuthContext';
 import NavItem from './NavItem';
-import UsageBar from '../../features/Dashboard/UsageBar';
-import { FiHome, FiSend, FiKey, FiGlobe, FiMail, FiFileText, FiList, FiCreditCard, FiUsers, FiSettings, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import UsageBar from '@components/app/ui/UsageBar';
+import { FiHome, FiSend, FiKey, FiGlobe, FiMail, FiFileText, FiList, FiCreditCard, FiUsers, FiSettings, FiCode, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
 const navItems = [
   { icon: FiHome, label: 'Dashboard', to: '/dashboard' },
@@ -15,6 +15,7 @@ const navItems = [
   { icon: FiList, label: 'Logs', to: '/logs' },
   { icon: FiCreditCard, label: 'Billing', to: '/billing' },
   { icon: FiUsers, label: 'Team', to: '/team' },
+  { icon: FiCode, label: 'Developers', to: '/developers' },
   { icon: FiSettings, label: 'Settings', to: '/settings' },
 ];
 

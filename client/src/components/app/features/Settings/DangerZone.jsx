@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import ConfirmDialog from '../../ui/ConfirmDialog';
-import { useAuth } from '../../../context/AuthContext';
+import ConfirmDialog from '@components/app/ui/ConfirmDialog';
+import { useAuth } from '@context/AuthContext';
 
 export default function DangerZone() {
   const [showConfirm, setShowConfirm] = useState(false);
@@ -13,15 +13,7 @@ export default function DangerZone() {
         <p className="text-sm text-gray-500 mb-4">Permanently delete your account and all data.</p>
         <button onClick={() => setShowConfirm(true)} className="btn-danger">Delete Account</button>
       </div>
-      <ConfirmDialog
-        isOpen={showConfirm}
-        onClose={() => setShowConfirm(false)}
-        onConfirm={() => { setShowConfirm(false); logout(); }}
-        title="Delete Account"
-        message="This action is irreversible. All your data will be permanently deleted."
-        confirmText="Delete Forever"
-        danger
-      />
+      <ConfirmDialog isOpen={showConfirm} onClose={() => setShowConfirm(false)} onConfirm={() => { setShowConfirm(false); logout(); }} title="Delete Account" message="This action is irreversible." confirmText="Delete Forever" danger />
     </>
   );
 }
