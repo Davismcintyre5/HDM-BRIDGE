@@ -6,13 +6,16 @@ import CreateApiKeyModal from '@components/app/features/ApiKeys/CreateApiKeyModa
 import ConfirmDialog from '@components/app/ui/ConfirmDialog';
 import { apiKeysAPI } from '@api/apiKeys';
 import { formatDate } from '@utils/helpers';
-import { FiKey, FiPlus } from 'react-icons/fi';
+import { FiKey, FiPlus, FiCopy, FiCheck } from 'react-icons/fi';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export default function ApiKeys() {
   const [keys, setKeys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [revokeId, setRevokeId] = useState(null);
+  const [copiedUrl, setCopiedUrl] = useState(false);
 
   useEffect(() => { fetchKeys(); }, []);
 
@@ -33,6 +36,12 @@ export default function ApiKeys() {
     }
   };
 
+  const copyBaseUrl = async () => {
+    await navigator.clipboard.writeText(API_BASE_URL);
+    setCopiedUrl(true);
+    setTimeout(() => setCopiedUrl(false), 3000);
+  };
+
   if (loading) return <LoadingSpinner />;
 
   return (
@@ -40,6 +49,23 @@ export default function ApiKeys() {
       <PageHeader title="API Keys" description="Manage your API keys" action={
         <button onClick={() => setShowCreate(true)} className="btn-primary btn-sm"><FiPlus size={16} className="mr-1" /> Create Key</button>
       } />
+
+      {/* Base URL Card */}
+      <div className="card mb-6 bg-indigo-50 border-indigo-200">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-indigo-900 mb-1">📡 Your API Base URL</h3>
+            <code className="text-indigo-700 text-sm font-mono">{API_BASE_URL}</code>
+          </div>
+          <button onClick={copyBaseUrl} className={`btn-sm rounded-lg flex items-center gap-2 ${copiedUrl ? 'bg-green-600 text-white' : 'btn-secondary'}`}>
+            {copiedUrl ? <><FiCheck size={14} /> Copied</> : <><FiCopy size={14} /> Copy</>}
+          </button>
+        </div>
+        <p className="text-xs text-indigo-600 mt-2">
+          Send POST requests to <code className="bg-indigo-100 px-1 rounded">{API_BASE_URL}/emails/send</code> with your API key
+        </p>
+      </div>
+
       {keys.length === 0 ? (
         <EmptyState icon={FiKey} title="No API keys" description="Create your first API key to start sending emails" action={
           <button onClick={() => setShowCreate(true)} className="btn-primary btn-sm">Create Key</button>
@@ -74,8 +100,9 @@ export default function ApiKeys() {
           </table>
         </div>
       )}
+
       <CreateApiKeyModal isOpen={showCreate} onClose={() => setShowCreate(false)} />
-      <ConfirmDialog isOpen={!!revokeId} onClose={() => setRevokeId(null)} onConfirm={handleRevoke} title="Revoke API Key" message="This key will no longer work. This action cannot be undone." confirmText="Revoke" danger />
+      <ConfirmDialog isOpen={!!revokeId} onClose={() => setRevokeId(null)} onConfirm={handleRevoke} title="Revoke API Key" message="This key will no longer work." confirmText="Revoke" danger />
     </>
   );
 }
