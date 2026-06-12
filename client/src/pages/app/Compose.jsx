@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import PageHeader from '@components/app/ui/PageHeader';
+import AttachmentUpload from '@components/app/features/Compose/AttachmentUpload';
 import { useApp } from '@context/AppContext';
 
 export default function Compose() {
   const { showToast } = useApp();
-  const [mode, setMode] = useState('single'); // 'single' | 'bulk'
+  const [mode, setMode] = useState('single');
   const [form, setForm] = useState({
     from: '', fromName: '', to: '', subject: '', htmlBody: '', textBody: '',
-    bulkTo: '', // comma-separated or newline-separated emails
+    bulkTo: '',
+    attachments: [],
   });
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
@@ -31,6 +33,20 @@ export default function Compose() {
     }
   };
 
+  const buildPayload = (recipient) => ({
+    from: form.from || undefined,
+    fromName: form.fromName || undefined,
+    to: recipient,
+    subject: form.subject,
+    htmlBody: form.htmlBody,
+    textBody: form.textBody || undefined,
+    attachments: form.attachments.length > 0 ? form.attachments.map(a => ({
+      filename: a.filename,
+      content: a.content,
+      type: a.type,
+    })) : undefined,
+  });
+
   const sendSingle = async () => {
     setLoading(true);
     try {
@@ -41,21 +57,14 @@ export default function Compose() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          from: form.from || undefined,
-          fromName: form.fromName || undefined,
-          to: form.to.trim(),
-          subject: form.subject,
-          htmlBody: form.htmlBody,
-          textBody: form.textBody || undefined,
-        }),
+        body: JSON.stringify(buildPayload(form.to.trim())),
       });
 
       const data = await res.json();
 
       if (data.success) {
         showToast('Email sent successfully!', 'success');
-        setForm({ ...form, to: '', subject: '', htmlBody: '', textBody: '' });
+        setForm({ ...form, to: '', subject: '', htmlBody: '', textBody: '', attachments: [] });
       } else {
         showToast(data.error || 'Failed to send', 'error');
       }
@@ -97,14 +106,7 @@ export default function Compose() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            from: form.from || undefined,
-            fromName: form.fromName || undefined,
-            to: recipient,
-            subject: form.subject,
-            htmlBody: form.htmlBody,
-            textBody: form.textBody || undefined,
-          }),
+          body: JSON.stringify(buildPayload(recipient)),
         });
 
         const data = await res.json();
@@ -127,7 +129,7 @@ export default function Compose() {
 
     if (failed === 0) {
       showToast(`All ${sent} emails sent!`, 'success');
-      setForm({ ...form, bulkTo: '', subject: '', htmlBody: '', textBody: '' });
+      setForm({ ...form, bulkTo: '', subject: '', htmlBody: '', textBody: '', attachments: [] });
     } else {
       showToast(`${sent} sent, ${failed} failed`, 'error');
     }
@@ -211,6 +213,12 @@ export default function Compose() {
             <label className="label">Text Body (optional)</label>
             <textarea name="textBody" className="input text-sm" rows={3} value={form.textBody} onChange={handleChange} placeholder="Plain text version" />
           </div>
+
+          <AttachmentUpload
+            attachments={form.attachments}
+            onChange={(attachments) => setForm({ ...form, attachments })}
+            maxSizeMB={10}
+          />
 
           <button type="submit" disabled={loading} className="btn-primary w-full py-3">
             {loading ? 'Sending...' : mode === 'single' ? 'Send Email' : `Send to ${form.bulkTo?.split(/[\n,]+/).filter(e => e.includes('@')).length || 0} Recipients`}
