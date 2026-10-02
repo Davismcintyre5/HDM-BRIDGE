@@ -1,15 +1,18 @@
 const router = require('express').Router();
-const { sendEmail, sendBulkEmails, getEmailStatus } = require('../../controllers/client/emailController');
+const {
+  sendEmail,
+  sendEmailFromDashboard,
+  sendBulkEmails,
+  getEmailStatus,
+} = require('../../controllers/client/emailController');
 const apiKeyAuth = require('../../middleware/common/apiKeyAuth');
 const auth = require('../../middleware/common/auth');
-const { emailSendLimiter } = require('../../middleware/common/rateLimiter');
 const tenantIsolation = require('../../middleware/common/tenantIsolation');
+const { requireActiveSubscription } = require('../../middleware/client/requireActiveSubscription');
 
-router.post('/send', apiKeyAuth, emailSendLimiter, tenantIsolation, sendEmail);
-router.post('/send-bulk', apiKeyAuth, emailSendLimiter, tenantIsolation, sendBulkEmails);
+router.post('/send', apiKeyAuth, tenantIsolation, requireActiveSubscription, sendEmail);
+router.post('/send-bulk', apiKeyAuth, tenantIsolation, requireActiveSubscription, sendBulkEmails);
 router.get('/status/:messageId', auth, tenantIsolation, getEmailStatus);
-
-// Add JWT-authenticated route for dashboard compose
-router.post('/compose', auth, tenantIsolation, emailSendLimiter, sendEmail);
+router.post('/compose', auth, tenantIsolation, requireActiveSubscription, sendEmailFromDashboard);
 
 module.exports = router;

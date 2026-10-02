@@ -2,6 +2,7 @@ const nodemailer = require('nodemailer');
 const Handlebars = require('handlebars');
 const EmailLog = require('../models/client/EmailLog');
 const Template = require('../models/client/Template');
+const queueService = require('./queueService');
 const { getRedisClient } = require('../config/redis');
 const logger = require('../utils/logger');
 const { AppError } = require('../middleware/common/errorHandler');
@@ -24,9 +25,9 @@ class EmailService {
 
     try {
       await this.transporter.verify();
-      console.log('✅ SMTP Connection Verified');
+      console.log('SMTP Connection Verified');
     } catch (error) {
-      console.error('❌ SMTP Connection Failed:', error.message);
+      console.error('SMTP Connection Failed:', error.message);
     }
   }
 
@@ -72,6 +73,104 @@ class EmailService {
     return trackedHtml + openPixel;
   }
 
+  async writeLog(data) {
+    try {
+      await EmailLog.updateOne(
+        { messageId: data.messageId },
+        {
+          $setOnInsert: {
+            messageId: data.messageId,
+            organizationId: data.organizationId,
+            userId: data.userId || null,
+            apiKeyId: data.apiKeyId || null,
+            apiKeyName: data.apiKeyName || null,
+            source: data.source || 'api',
+            templateId: data.templateId || null,
+            templateKey: data.templateKey || null,
+            from: { email: data.from, name: data.fromName || null },
+            to: { email: data.to, name: data.toName || null },
+            replyTo: data.replyTo || null,
+            subject: data.subject,
+            htmlBody: data.htmlBody || null,
+            textBody: data.textBody || null,
+            status: 'queued',
+            priority: data.priority || 'normal',
+            tags: data.tags || [],
+            attachments: (data.attachments || []).map((a) => ({
+              filename: a.filename,
+              size: a.size || null,
+              mimeType: a.type || null,
+            })),
+          },
+        },
+        { upsert: true }
+      );
+    } catch (err) {
+      if (err.code === 11000) return;
+      logger.error('emailService.writeLog failed: ' + err.message);
+    }
+  }
+
+  async send(to, templateKey, data = {}, options = {}) {
+    const templates = require('../templates/emailTemplates');
+    const render = templates[templateKey];
+
+    if (!render) {
+      throw new AppError('Unknown email template: ' + templateKey, 500, 'TEMPLATE_001');
+    }
+
+    const tpl = await render(data);
+
+    const messageId = options.messageId || this.generateMessageId();
+    const priority = options.priority || 'normal';
+    const from = options.from || process.env.SYSTEM_FROM_EMAIL || process.env.SMTP_FROM_EMAIL;
+    const fromName = options.fromName || process.env.SYSTEM_FROM_NAME || process.env.SMTP_FROM_NAME || 'HDM BRIDGE';
+    const source = options.source || 'system';
+
+    if (options.organizationId) {
+      await this.writeLog({
+        messageId,
+        organizationId: options.organizationId,
+        userId: options.userId,
+        apiKeyId: options.apiKeyId,
+        apiKeyName: options.apiKeyName,
+        source,
+        templateKey,
+        from,
+        fromName,
+        to,
+        subject: tpl.subject,
+        htmlBody: tpl.html,
+        textBody: tpl.text,
+        priority,
+        tags: options.tags || ['system'],
+      });
+    }
+
+    const job = await queueService.addToQueue(
+      {
+        organizationId: options.organizationId || null,
+        userId: options.userId || null,
+        messageId,
+        from,
+        fromName,
+        to,
+        subject: tpl.subject,
+        htmlBody: tpl.html,
+        textBody: tpl.text,
+        replyTo: options.replyTo,
+        attachments: options.attachments,
+        tracking: options.tracking !== false,
+        priority,
+        tags: options.tags || ['system'],
+      },
+      priority
+    );
+
+    logger.info('System email queued: ' + templateKey + ' -> ' + to + ' (' + messageId + ') source=' + source);
+    return { success: true, messageId, jobId: job?.id };
+  }
+
   async sendEmail(emailData) {
     const startTime = Date.now();
 
@@ -110,7 +209,7 @@ class EmailService {
       };
 
       if (emailData.attachments && emailData.attachments.length > 0) {
-        mailOptions.attachments = emailData.attachments.map(function(att) {
+        mailOptions.attachments = emailData.attachments.map(function (att) {
           return {
             filename: att.filename,
             content: Buffer.from(att.content, 'base64'),
@@ -121,7 +220,9 @@ class EmailService {
 
       const info = await this.transporter.sendMail(mailOptions);
 
-      await this.incrementUsageCounter(emailData.organizationId);
+      if (emailData.organizationId) {
+        await this.incrementUsageCounter(emailData.organizationId);
+      }
 
       const duration = Date.now() - startTime;
       logger.info('Email sent: ' + messageId + ' - ' + duration + 'ms');
@@ -132,7 +233,6 @@ class EmailService {
         status: 'sent',
         duration: duration,
       };
-
     } catch (error) {
       logger.error('Email send failed: ' + error.message);
 

@@ -33,7 +33,12 @@ export default function Login() {
             <input type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
           </div>
           <div>
-            <label className="label">Password</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="label mb-0">Password</label>
+              <Link to="/forgot-password" className="text-xs text-indigo-600 hover:underline">
+                Forgot password?
+              </Link>
+            </div>
             <input type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required />
           </div>
           <button type="submit" disabled={loading} className="btn-primary w-full py-2.5">

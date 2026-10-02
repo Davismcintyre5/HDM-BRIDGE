@@ -8,7 +8,7 @@ const defaultFeatures = {
 
 export default function PricingCard({ plan }) {
   const features = defaultFeatures[plan.tier] || defaultFeatures.free;
-  const price = plan.convertedPrice?.formatted || `$${plan.price?.amount || 0}`;
+  const price = plan.convertedPrice?.formatted || '—';
   const emails = plan.limits?.monthlyEmails?.toLocaleString() || '0';
 
   return (

@@ -16,6 +16,14 @@ const transactionSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Subscription',
     },
+    invoiceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Invoice',
+      index: true,
+    },
+    invoiceNumber: {
+      type: String,
+    },
     type: {
       type: String,
       enum: ['subscription', 'overage', 'refund', 'credit', 'manual'],
@@ -34,7 +42,6 @@ const transactionSchema = new mongoose.Schema(
     currency: {
       type: String,
       default: 'USD',
-      enum: ['USD', 'KES', 'GBP', 'EUR'],
     },
     exchangeRate: {
       type: Number,
@@ -56,10 +63,6 @@ const transactionSchema = new mongoose.Schema(
       receiptNumber: String,
     },
     description: String,
-    invoiceNumber: {
-      type: String,
-      unique: true,
-    },
     invoiceUrl: String,
     refundDetails: {
       refundedAt: Date,
@@ -97,16 +100,9 @@ const transactionSchema = new mongoose.Schema(
   }
 );
 
-transactionSchema.pre('save', async function (next) {
-  if (!this.invoiceNumber) {
-    const count = await mongoose.model('Transaction').countDocuments();
-    this.invoiceNumber = `INV-${Date.now()}-${count + 1}`;
-  }
-  next();
-});
-
 transactionSchema.index({ organizationId: 1, createdAt: -1 });
 transactionSchema.index({ status: 1 });
-transactionSchema.index({ invoiceNumber: 1 });
+transactionSchema.index({ invoiceNumber: 1 }, { sparse: true });
+transactionSchema.index({ 'mpesaDetails.checkoutRequestId': 1 }, { sparse: true });
 
 module.exports = mongoose.model('Transaction', transactionSchema);

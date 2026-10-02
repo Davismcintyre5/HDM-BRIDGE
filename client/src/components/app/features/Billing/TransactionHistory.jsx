@@ -1,8 +1,18 @@
+import { useEffect, useState } from 'react';
 import TransactionRow from './TransactionRow';
-import EmptyState from '../../ui/EmptyState';
+import EmptyState from '@components/app/ui/EmptyState';
 import { FiDollarSign } from 'react-icons/fi';
+import { currencyAPI } from '@api/currency';
 
 export default function TransactionHistory({ transactions }) {
+  const [currencies, setCurrencies] = useState([]);
+
+  useEffect(() => {
+    currencyAPI.getSupported()
+      .then(({ data }) => setCurrencies(data.currencies || []))
+      .catch(() => {});
+  }, []);
+
   if (!transactions || transactions.length === 0) {
     return <EmptyState icon={FiDollarSign} title="No transactions" description="Your payment history will appear here" />;
   }
@@ -20,7 +30,7 @@ export default function TransactionHistory({ transactions }) {
         </thead>
         <tbody>
           {transactions.map((t) => (
-            <TransactionRow key={t._id} transaction={t} />
+            <TransactionRow key={t._id} transaction={t} currencies={currencies} />
           ))}
         </tbody>
       </table>

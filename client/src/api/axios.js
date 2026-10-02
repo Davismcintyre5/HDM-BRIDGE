@@ -18,10 +18,23 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    const code = error.response?.data?.code;
+    const path = window.location.pathname;
+
+    if (status === 401) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      if (path !== '/login') window.location.href = '/login';
+      return Promise.reject(error);
     }
+
+    if (status === 402 && code === 'PAYMENT_REQUIRED') {
+      if (path !== '/renew' && path !== '/login' && path !== '/register') {
+        window.location.href = '/renew';
+      }
+      return Promise.reject(error);
+    }
+
     return Promise.reject(error);
   }
 );

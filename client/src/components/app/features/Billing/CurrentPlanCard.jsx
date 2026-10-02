@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { billingAPI } from '@api/billing';
 
 export default function CurrentPlanCard() {
   const [subscription, setSubscription] = useState(null);
+  const [pendingInvoice, setPendingInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const fetchSubscription = async () => {
@@ -15,11 +17,24 @@ export default function CurrentPlanCard() {
     setLoading(false);
   };
 
- useEffect(() => {
-  fetchSubscription();
-  const interval = setInterval(fetchSubscription, 10000);
-  return () => clearInterval(interval);
-}, []);
+  const fetchPendingInvoice = async () => {
+    try {
+      const res = await billingAPI.getTransactions(1);
+      const list = res?.data?.data || [];
+      const pending = list.find((t) => t.status === 'pending');
+      setPendingInvoice(pending || null);
+    } catch {}
+  };
+
+  useEffect(() => {
+    fetchSubscription();
+    fetchPendingInvoice();
+    const interval = setInterval(() => {
+      fetchSubscription();
+      fetchPendingInvoice();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   if (loading) {
     return (
@@ -51,6 +66,18 @@ export default function CurrentPlanCard() {
           <a href="#plans" className="btn-primary btn-sm">Upgrade</a>
         )}
       </div>
+
+      {pendingInvoice && pendingInvoice.invoiceNumber && (
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <p className="text-xs text-gray-500">You have a pending payment</p>
+          <Link
+            to={`/invoice/${pendingInvoice.invoiceNumber}`}
+            className="text-sm text-indigo-600 hover:underline"
+          >
+            View invoice →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

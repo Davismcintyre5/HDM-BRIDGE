@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import PricingCard from './PricingCard';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 export default function PricingSection() {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     fetchPlans();
@@ -12,18 +13,16 @@ export default function PricingSection() {
 
   const fetchPlans = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch(`${API_URL}/billing/plans`, { headers });
+      const res = await fetch(`${API_URL}/landing/plans`);
       const data = await res.json();
       if (data.success) {
-        setPlans(data.plans.filter(p => p.tier !== 'enterprise'));
+        setPlans(data.plans || []);
       }
     } catch (err) {
       setPlans([
-        { name: 'Free', tier: 'free', price: { amount: 0 }, convertedPrice: { formatted: '$0', amount: 0 }, limits: { monthlyEmails: 3000 }, metadata: { isRecommended: false } },
-        { name: 'Pro', tier: 'pro', price: { amount: 19 }, convertedPrice: { formatted: '$19', amount: 19 }, limits: { monthlyEmails: 50000 }, metadata: { isRecommended: true, badge: 'Popular' } },
-        { name: 'Pro+', tier: 'proplus', price: { amount: 79 }, convertedPrice: { formatted: '$79', amount: 79 }, limits: { monthlyEmails: 500000 }, metadata: { isRecommended: false, badge: 'Best Value' } },
+        { name: 'Free', tier: 'free', price: { amount: 0 }, convertedPrice: { formatted: '—', amount: 0 }, limits: { monthlyEmails: 3000 }, metadata: { isRecommended: false } },
+        { name: 'Pro', tier: 'pro', price: { amount: 19 }, convertedPrice: { formatted: '—', amount: 19 }, limits: { monthlyEmails: 50000 }, metadata: { isRecommended: true, badge: 'Popular' } },
+        { name: 'Pro+', tier: 'proplus', price: { amount: 79 }, convertedPrice: { formatted: '—', amount: 79 }, limits: { monthlyEmails: 500000 }, metadata: { isRecommended: false, badge: 'Best Value' } },
       ]);
     } finally {
       setLoading(false);
