@@ -22,6 +22,7 @@ const { errorHandler } = require('./middleware/common/errorHandler');
 const logger = require('./utils/logger');
 const startEmailWorker = require('./workers/emailWorker');
 const { startWorker: startSubscriptionWorker } = require('./workers/subscriptionWorker');
+const { startKeepAlive, stopKeepAlive } = require('./config/keepAlive');
 
 const app = express();
 
@@ -150,6 +151,7 @@ async function start() {
       console.log('   Health:     http://localhost:' + PORT + '/health');
       console.log('   Client:     ' + (process.env.CLIENT_URL || 'http://localhost:3000'));
       console.log('   Admin UI:   ' + (process.env.ADMIN_URL || 'http://localhost:3001'));
+      console.log('   Keep Alive: ' + (process.env.KEEP_ALIVE_ENABLED === 'true' ? 'ON (' + (process.env.BASE_URL || 'BASE_URL not set') + '/health every 10m)' : 'OFF'));
       console.log('');
       console.log('   Environment: ' + (process.env.NODE_ENV || 'development'));
       console.log('   App Name:    ' + (process.env.APP_NAME || 'HDM BRIDGE'));
@@ -157,6 +159,7 @@ async function start() {
 
       startEmailWorker();
       startSubscriptionWorker();
+      startKeepAlive();
 
       console.log('   Ready to send emails!');
       console.log('');
@@ -172,6 +175,8 @@ async function gracefulShutdown(signal) {
   console.log('\n\n' + signal + ' received. Shutting down gracefully...\n');
 
   try {
+    stopKeepAlive();
+
     try {
       const redis = getRedisClient();
       await redis.quit();
