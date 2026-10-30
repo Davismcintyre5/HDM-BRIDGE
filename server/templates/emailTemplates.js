@@ -398,6 +398,69 @@ async function senderVerified({ firstName, senderEmail }) {
   });
 }
 
+/* ── NEW: notify admin of a customer submission ─────────────── */
+async function adminNewSenderApplication({
+  adminName,
+  senderName,
+  senderEmail,
+  domain,
+  orgName,
+  userName,
+  userEmail,
+  submittedAt,
+  reviewUrl,
+}) {
+  return render({
+    subject: `New sender application: ${senderEmail}`,
+    headerTitle: 'New sender application',
+    body: `
+      <h2>Hi ${esc(adminName || 'there')},</h2>
+      <p>A customer has submitted a new sender for approval.</p>
+      <div class="box box-yellow">
+        ${dataRow('Sender name', senderName)}
+        ${dataRow('Sender email', senderEmail, true)}
+        ${dataRow('Domain', domain)}
+        ${dataRow('Organization', orgName)}
+        ${dataRow('Submitted by', userName ? `${userName} (${userEmail || ''})` : userEmail)}
+        ${dataRow('Submitted', fmtDateTime(submittedAt))}
+      </div>
+      <p>Review the submission in the admin panel. Approval enables the sender for that customer only — it will not be shared with other organizations.</p>
+      ${button(reviewUrl || DEFAULTS.adminUrl + '/senders', 'Review in Admin')}
+    `,
+  });
+}
+
+/* ── NEW: client sender approved (admin-driven) ─────────────── */
+async function senderApproved({ firstName, senderName, senderEmail, sendersUrl }) {
+  return render({
+    subject: `Sender approved: ${senderEmail}`,
+    headerColor: '#059669',
+    headerTitle: 'Sender approved',
+    body: `
+      <h2>Hi ${esc(firstName || 'there')},</h2>
+      ${alertBox('success', `<strong>${esc(senderName)}</strong> (<span class="mono">${esc(senderEmail)}</span>) has been approved and is ready to use.`)}
+      <p>You can now set it as your default sender or use it in your API "from" field.</p>
+      ${button(sendersUrl || DEFAULTS.clientUrl + '/senders', 'Manage Senders')}
+    `,
+  });
+}
+
+/* ── NEW: client sender rejected (admin-driven) ─────────────── */
+async function senderRejected({ firstName, senderName, senderEmail, reason, sendersUrl }) {
+  return render({
+    subject: `Sender application not approved: ${senderEmail}`,
+    headerColor: '#dc2626',
+    headerTitle: 'Sender not approved',
+    body: `
+      <h2>Hi ${esc(firstName || 'there')},</h2>
+      ${alertBox('danger', `Your sender <strong>${esc(senderName)}</strong> (<span class="mono">${esc(senderEmail)}</span>) was not approved.`)}
+      ${reason ? `${dataRow('Reason', reason)}` : ''}
+      <p>You can fix the issue and resubmit — or contact support if you think this was a mistake.</p>
+      ${button(sendersUrl || DEFAULTS.clientUrl + '/senders', 'Go to Senders', true)}
+    `,
+  });
+}
+
 /* ========================= BILLING ========================= */
 
 async function invoiceCreated({ firstName, invoiceNumber, planName, amount, currency, dueDate, paymentInstructions, invoiceUrl }) {
@@ -505,19 +568,21 @@ async function subscriptionActivated({ firstName, planName, periodStart, periodE
   });
 }
 
-async function subscriptionRenewed({ firstName, planName, amount, currency, periodEnd, invoiceNumber }) {
+async function subscriptionRenewed({ firstName, planName, periodStart, periodEnd, dashboardUrl }) {
   return render({
-    subject: `Renewal successful — ${planName}`,
+    subject: `Your ${planName} plan is active again`,
     headerColor: '#059669',
-    headerTitle: 'Subscription renewed',
+    headerTitle: 'Welcome back',
     body: `
       <h2>Hi ${esc(firstName || 'there')},</h2>
-      <p>Your <strong>${esc(planName)}</strong> subscription renewed successfully.</p>
+      ${alertBox('success', `Payment received. Your <strong>${esc(planName)}</strong> plan is active again.`)}
       <div class="box box-green">
-        ${dataRow('Invoice', invoiceNumber, true)}
-        ${dataRow('Amount', money(amount, currency))}
-        ${dataRow('Valid until', fmtDate(periodEnd))}
+        ${dataRow('Plan', planName)}
+        ${dataRow('Starts', fmtDate(periodStart))}
+        ${dataRow('Renews', fmtDate(periodEnd))}
       </div>
+      <p>All services have been restored. Sending and write access are enabled.</p>
+      ${button(dashboardUrl || DEFAULTS.clientUrl + '/dashboard', 'Go to Dashboard')}
     `,
   });
 }
@@ -990,25 +1055,6 @@ async function renewalReminder({ firstName, invoiceNumber, planName, amount, cur
   });
 }
 
-async function subscriptionRenewed({ firstName, planName, periodStart, periodEnd, dashboardUrl }) {
-  return render({
-    subject: `Your ${planName} plan is active again`,
-    headerColor: '#059669',
-    headerTitle: 'Welcome back',
-    body: `
-      <h2>Hi ${esc(firstName || 'there')},</h2>
-      ${alertBox('success', `Payment received. Your <strong>${esc(planName)}</strong> plan is active again.`)}
-      <div class="box box-green">
-        ${dataRow('Plan', planName)}
-        ${dataRow('Starts', fmtDate(periodStart))}
-        ${dataRow('Renews', fmtDate(periodEnd))}
-      </div>
-      <p>All services have been restored. Sending and write access are enabled.</p>
-      ${button(dashboardUrl || DEFAULTS.clientUrl + '/dashboard', 'Go to Dashboard')}
-    `,
-  });
-}
-
 module.exports = {
   verifyEmail,
   welcome,
@@ -1030,6 +1076,9 @@ module.exports = {
 
   senderAdded,
   senderVerified,
+  adminNewSenderApplication,   // NEW
+  senderApproved,              // NEW
+  senderRejected,              // NEW
 
   invoiceCreated,
   paymentReceived,
@@ -1071,5 +1120,4 @@ module.exports = {
   renewalInvoice,
   subscriptionFrozen,
   renewalReminder,
-  subscriptionRenewed,
 };

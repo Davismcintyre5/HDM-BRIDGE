@@ -25,6 +25,7 @@ const adminAuditLogSchema = new mongoose.Schema(
         'plan',
         'currency',
         'system',
+        'sender',
         'legal',
         'analytics',
         'ai_widget',

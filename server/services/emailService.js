@@ -6,10 +6,12 @@ const queueService = require('./queueService');
 const { getRedisClient } = require('../config/redis');
 const logger = require('../utils/logger');
 const { AppError } = require('../middleware/common/errorHandler');
+const templates = require('../templates/emailTemplates');
 
 class EmailService {
   constructor() {
     this.transporter = null;
+    this._initPromise = null;
   }
 
   async initTransporter() {
@@ -29,6 +31,24 @@ class EmailService {
     } catch (error) {
       console.error('SMTP Connection Failed:', error.message);
     }
+  }
+
+  /**
+   * Lazily initialize the transporter exactly once, even under concurrent
+   * first sends. Safe to call from anywhere; returns the shared promise.
+   */
+  async ensureTransporter() {
+    if (this.transporter) return this.transporter;
+    if (!this._initPromise) {
+      this._initPromise = this.initTransporter().finally(() => {
+        this._initPromise = null;
+      });
+    }
+    await this._initPromise;
+    if (!this.transporter) {
+      throw new AppError('Email transporter not initialized', 503, 'EMAIL_NOT_READY');
+    }
+    return this.transporter;
   }
 
   generateMessageId() {
@@ -112,7 +132,6 @@ class EmailService {
   }
 
   async send(to, templateKey, data = {}, options = {}) {
-    const templates = require('../templates/emailTemplates');
     const render = templates[templateKey];
 
     if (!render) {
@@ -173,9 +192,12 @@ class EmailService {
 
   async sendEmail(emailData) {
     const startTime = Date.now();
+    // Hoisted: must be in scope for the catch block so failures are logged
+    // against the same messageId that the caller/queue handed us.
+    const messageId = emailData.messageId || this.generateMessageId();
 
     try {
-      const messageId = emailData.messageId || this.generateMessageId();
+      const transporter = await this.ensureTransporter();
 
       let htmlBody = emailData.htmlBody;
       let textBody = emailData.textBody;
@@ -218,7 +240,7 @@ class EmailService {
         });
       }
 
-      const info = await this.transporter.sendMail(mailOptions);
+      const info = await transporter.sendMail(mailOptions);
 
       if (emailData.organizationId) {
         await this.incrementUsageCounter(emailData.organizationId);
@@ -234,22 +256,27 @@ class EmailService {
         duration: duration,
       };
     } catch (error) {
-      logger.error('Email send failed: ' + error.message);
+      logger.error('Email send failed [' + messageId + ']: ' + error.message);
 
-      const currentLog = await EmailLog.findOne({ messageId: emailData.messageId });
-      if (currentLog) {
-        const attempts = (currentLog.deliveryDetails?.attempts || 0) + 1;
-        await EmailLog.updateOne(
-          { messageId: emailData.messageId },
-          {
-            $set: {
-              status: 'failed',
-              'deliveryDetails.attempts': attempts,
-              'deliveryDetails.lastAttempt': new Date(),
-              'deliveryDetails.smtpResponse': error.message,
-            },
-          }
-        );
+      try {
+        const currentLog = await EmailLog.findOne({ messageId });
+        if (currentLog) {
+          const attempts = (currentLog.deliveryDetails?.attempts || 0) + 1;
+          await EmailLog.updateOne(
+            { messageId },
+            {
+              $set: {
+                status: 'failed',
+                'deliveryDetails.attempts': attempts,
+                'deliveryDetails.lastAttempt': new Date(),
+                'deliveryDetails.smtpResponse': error.message,
+              },
+            }
+          );
+        }
+      } catch (logErr) {
+        // Never let failure-logging mask the original send error.
+        logger.error('Failed to record send failure for ' + messageId + ': ' + logErr.message);
       }
 
       throw new AppError('Email sending failed: ' + error.message, 502, 'EMAIL_SEND_FAILED');
@@ -273,23 +300,20 @@ class EmailService {
 
   async handleOpen(messageId, userAgent, ip) {
     try {
-      const currentLog = await EmailLog.findOne({ messageId: messageId });
-      if (currentLog) {
-        const openCount = (currentLog.tracking?.openCount || 0) + 1;
-        await EmailLog.updateOne(
-          { messageId: messageId },
-          {
-            $set: {
-              'tracking.opened': true,
-              'tracking.openIP': ip,
-              'tracking.openUserAgent': userAgent,
-              'tracking.openedAt': new Date(),
-              'tracking.openCount': openCount,
-              status: 'opened',
-            },
-          }
-        );
-      }
+      // Atomic $inc — no read-then-write race. No-op if the message doesn't exist.
+      await EmailLog.updateOne(
+        { messageId },
+        {
+          $inc: { 'tracking.openCount': 1 },
+          $set: {
+            'tracking.opened': true,
+            'tracking.openIP': ip,
+            'tracking.openUserAgent': userAgent,
+            'tracking.openedAt': new Date(),
+            status: 'opened',
+          },
+        }
+      );
     } catch (error) {
       logger.error('Open tracking failed: ' + error.message);
     }
@@ -297,24 +321,21 @@ class EmailService {
 
   async handleClick(messageId, url, userAgent, ip) {
     try {
-      const currentLog = await EmailLog.findOne({ messageId: messageId });
-      if (currentLog) {
-        const clickCount = (currentLog.tracking?.clickCount || 0) + 1;
-        await EmailLog.updateOne(
-          { messageId: messageId },
-          {
-            $set: {
-              'tracking.clicked': true,
-              'tracking.clickedUrl': url,
-              'tracking.clickIP': ip,
-              'tracking.clickUserAgent': userAgent,
-              'tracking.clickedAt': new Date(),
-              'tracking.clickCount': clickCount,
-              status: 'clicked',
-            },
-          }
-        );
-      }
+      // Atomic $inc — no read-then-write race. No-op if the message doesn't exist.
+      await EmailLog.updateOne(
+        { messageId },
+        {
+          $inc: { 'tracking.clickCount': 1 },
+          $set: {
+            'tracking.clicked': true,
+            'tracking.clickedUrl': url,
+            'tracking.clickIP': ip,
+            'tracking.clickUserAgent': userAgent,
+            'tracking.clickedAt': new Date(),
+            status: 'clicked',
+          },
+        }
+      );
     } catch (error) {
       logger.error('Click tracking failed: ' + error.message);
     }

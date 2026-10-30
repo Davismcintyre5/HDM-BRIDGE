@@ -26,11 +26,36 @@ const senderSchema = new mongoose.Schema(
       maxlength: 100,
     },
     domain: String,
+
+    // ── verification (usable flag) ────────────────────────────────
     isVerified: {
       type: Boolean,
       default: false,
     },
     verifiedAt: Date,
+    verifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AdminUser',
+    },
+
+    // ── admin review workflow ────────────────────────────────────
+    reviewStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending',
+      index: true,
+    },
+    reviewSubmittedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    rejectionReason: String,
+    rejectedAt: Date,
+    rejectedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AdminUser',
+    },
+
     isActive: {
       type: Boolean,
       default: true,
@@ -49,5 +74,6 @@ const senderSchema = new mongoose.Schema(
 
 senderSchema.index({ organizationId: 1, email: 1 }, { unique: true });
 senderSchema.index({ isVerified: 1 });
+senderSchema.index({ reviewStatus: 1, reviewSubmittedAt: -1 });
 
 module.exports = mongoose.model('Sender', senderSchema);
