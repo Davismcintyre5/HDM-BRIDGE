@@ -22,74 +22,14 @@ const startEmailWorker = require('./workers/emailWorker');
 const { startWorker: startSubscriptionWorker } = require('./workers/subscriptionWorker');
 const { startKeepAlive, stopKeepAlive } = require('./config/keepAlive');
 
+const botProtection = require('./middleware/global/botProtection');
+
 const APP_NAME = process.env.APP_NAME || 'HDM BRIDGE';
 const VERSION = '1.0.0';
 const PORT = process.env.PORT || 5000;
 const APP_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
 const CLIENT_URL = (process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const ADMIN_URL = (process.env.ADMIN_URL || 'http://localhost:3001').replace(/\/+$/, '');
-
-const BOT_PROBES = [
-  '/.env',
-  '/.git',
-  '/.gitignore',
-  '/.htaccess',
-  '/.ds_store',
-  '/.vscode',
-  '/.idea',
-  '/.aws',
-  '/.ssh',
-  '/info.php',
-  '/phpinfo.php',
-  '/wp-admin',
-  '/wp-login.php',
-  '/wp-content',
-  '/wp-includes',
-  '/wp-json',
-  '/xmlrpc.php',
-  '/administrator',
-  '/actuator',
-  '/telescope',
-  '/graphql',
-  '/graphiql',
-  '/v2/_catalog',
-  '/server-status',
-  '/server-info',
-  '/trace.axd',
-  '/elmah.axd',
-  '/debug/default',
-  '/ecp/current',
-  '/@vite',
-  '/_profiler',
-  '/___proxy_subdomain_whm',
-  '/___proxy_subdomain_cpanel',
-  '/config.json',
-  '/config.yml',
-  '/config.yaml',
-  '/backup.zip',
-  '/backup.sql',
-  '/database.sql',
-  '/dump.sql',
-  '/cgi-bin',
-  '/shell.php',
-  '/phpmyadmin',
-  '/pma',
-  '/admin.php',
-  '/adminer.php',
-  '/manager/html',
-  '/solr',
-  '/elasticsearch',
-  '/_cluster/health',
-  '/_cat/indices',
-  '/jenkins',
-  '/nexus',
-  '/management',
-  '/swagger-ui.html',
-  '/swagger-resources',
-  '/openapi.json',
-  '/api-docs',
-  '/v3/api-docs',
-].map((p) => p.toLowerCase());
 
 const C = {
   reset: '\x1b[0m',
@@ -98,7 +38,6 @@ const C = {
   cyan: '\x1b[36m',
   green: '\x1b[32m',
   yellow: '\x1b[33m',
-  red: '\x1b[31m',
 };
 
 function stripAnsi(str) {
@@ -115,29 +54,11 @@ function banner(lines) {
   return `\n${top}\n${body}\n${bottom}\n`;
 }
 
-function isBotProbe(pathname) {
-  const p = (pathname || '').toLowerCase();
-  return BOT_PROBES.some(
-    (probe) => p === probe || p.startsWith(probe + '/') || p.startsWith(probe + '.')
-  );
-}
-
 const app = express();
 
 app.set('trust proxy', true);
 
-app.use((req, res, next) => {
-  if (isBotProbe(req.path)) {
-    logger.debug(`bot probe blocked: ${req.path} from ${req.ip}`);
-    return res.status(404).json({
-      success: false,
-      error: 'Route not found',
-      code: 'NOT_FOUND',
-      path: req.originalUrl,
-    });
-  }
-  next();
-});
+app.use(botProtection);
 
 app.use(
   helmet({
