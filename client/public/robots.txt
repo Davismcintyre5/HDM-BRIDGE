@@ -1,0 +1,21 @@
+# https://www.robotstxt.org/
+
+User-agent: *
+
+Disallow: /dashboard
+Disallow: /compose
+Disallow: /api-keys
+Disallow: /domains
+Disallow: /senders
+Disallow: /templates
+Disallow: /logs
+Disallow: /billing
+Disallow: /invoice
+Disallow: /renew
+Disallow: /team
+Disallow: /settings
+Disallow: /developers
+Disallow: /verify-email
+Disallow: /reset-password
+
+Sitemap: https://bridge.hdm.co.ke/sitemap.xml
