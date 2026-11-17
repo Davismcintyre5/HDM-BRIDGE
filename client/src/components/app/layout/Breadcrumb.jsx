@@ -3,6 +3,10 @@ import { useLocation } from 'react-router-dom';
 const labels = {
   dashboard: 'Dashboard',
   compose: 'Compose',
+  sms: 'SMS',
+  'sms/send': 'Send SMS',
+  'sms/wallet': 'SMS Wallet',
+  'sms/logs': 'SMS Logs',
   'api-keys': 'API Keys',
   domains: 'Domains',
   senders: 'Senders',
@@ -11,12 +15,13 @@ const labels = {
   billing: 'Billing',
   team: 'Team',
   settings: 'Settings',
+  developers: 'Developers',
 };
 
 export default function Breadcrumb() {
   const location = useLocation();
-  const path = location.pathname.split('/').filter(Boolean)[0] || 'dashboard';
-  const label = labels[path] || path;
+  const path = location.pathname.replace(/^\//, '');
+  const label = labels[path] || labels[path.split('/')[0]] || path;
 
   return (
     <div className="flex items-center space-x-2 text-sm">

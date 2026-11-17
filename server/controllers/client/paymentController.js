@@ -4,6 +4,7 @@ const paypalService = require('../../services/paypalService');
 const emailService = require('../../services/emailService');
 const adminNotifier = require('../../services/adminNotifier');
 const rateLimitService = require('../../services/rateLimitService');
+const smsTopupService = require('../../services/smsTopupService');
 const Transaction = require('../../models/client/Transaction');
 const Subscription = require('../../models/client/Subscription');
 const Invoice = require('../../models/client/Invoice');
@@ -233,6 +234,30 @@ async function processMpesaCallback(payload, parsed) {
         'paymentProvider.receiptNumber': parsed.mpesaReceiptNumber,
       });
 
+      const metaType = transaction.metadata?.get
+        ? transaction.metadata.get('type')
+        : transaction.metadata?.type;
+
+      if (metaType === 'sms_topup') {
+        const smsResult = await smsTopupService.completeSmsTopup(
+          transaction,
+          {
+            reference: parsed.mpesaReceiptNumber,
+            receiptNumber: parsed.mpesaReceiptNumber,
+            phoneNumber: parsed.phoneNumber,
+            amount: parsed.amount,
+          },
+          'mpesa'
+        );
+
+        if (smsResult.success) {
+          logger.info('SMS top-up completed: ' + parsed.mpesaReceiptNumber + ' org=' + transaction.organizationId);
+        } else {
+          logger.error('SMS top-up credit failed: ' + smsResult.reason + ' tx=' + transaction._id);
+        }
+        return;
+      }
+
       const invoice = transaction.invoiceId
         ? await Invoice.findById(transaction.invoiceId)
         : transaction.invoiceNumber
@@ -321,6 +346,15 @@ async function processMpesaCallback(payload, parsed) {
         'mpesaDetails.resultCode': parsed.resultCode,
         'mpesaDetails.resultDesc': parsed.resultDesc,
       });
+
+      const metaType = transaction.metadata?.get
+        ? transaction.metadata.get('type')
+        : transaction.metadata?.type;
+
+      if (metaType === 'sms_topup') {
+        logger.warn('SMS top-up failed: ' + parsed.resultCode + ' ' + parsed.resultDesc);
+        return;
+      }
 
       const user = transaction.userId ? await User.findById(transaction.userId) : null;
 

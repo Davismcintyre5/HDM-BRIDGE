@@ -1,13 +1,45 @@
 import { Link } from 'react-router-dom';
 
-const defaultFeatures = {
-  free: ['3,000 emails/month', '2 API keys', '1 domain', '5 templates', '7 days log retention', 'Basic analytics'],
-  pro: ['50,000 emails/month', '10 API keys', '3 domains', '50 templates', '30 days log retention', 'Webhooks', 'Advanced analytics', 'Custom DKIM'],
-  proplus: ['500,000+ emails/month', 'Unlimited API keys', 'Unlimited domains', 'Unlimited templates', '90 days log retention', 'Priority support', 'White-label', 'Team management'],
+const baseFeatures = {
+  free: [
+    '3,000 emails/month',
+    '2 API keys',
+    '1 domain',
+    '5 templates',
+    '7 days log retention',
+    'Basic analytics',
+  ],
+  pro: [
+    '50,000 emails/month',
+    '10 API keys',
+    '3 domains',
+    '50 templates',
+    '30 days log retention',
+    'Webhooks',
+    'Advanced analytics',
+    'Custom DKIM',
+  ],
+  proplus: [
+    '500,000+ emails/month',
+    'Unlimited API keys',
+    'Unlimited domains',
+    'Unlimited templates',
+    '90 days log retention',
+    'Priority support',
+    'White-label',
+    'Team management',
+  ],
 };
 
-export default function PricingCard({ plan }) {
-  const features = defaultFeatures[plan.tier] || defaultFeatures.free;
+export default function PricingCard({ plan, smsRateKes }) {
+  const base = baseFeatures[plan.tier] || baseFeatures.free;
+  const smsLine = smsRateKes != null
+    ? `Pay-as-you-go SMS (KSh ${smsRateKes}/send)`
+    : 'Pay-as-you-go SMS';
+
+  // Insert SMS bullet as 2nd item
+  const features = [base[0], smsLine, ...base.slice(1)];
+
   const price = plan.convertedPrice?.formatted || '—';
   const emails = plan.limits?.monthlyEmails?.toLocaleString() || '0';
 

@@ -9,6 +9,28 @@ import CopyButton from '@components/app/ui/CopyButton';
 import { FiMail, FiPlus, FiStar } from 'react-icons/fi';
 import { sendersAPI } from '@api/senders';
 
+const channelsOf = (s) =>
+  Array.isArray(s?.channels) && s.channels.length > 0 ? s.channels : ['email'];
+
+const ChannelBadge = ({ channel, active }) => {
+  if (channel === 'email') {
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-indigo-100 text-indigo-700">
+        Email
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
+        active ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-800'
+      }`}
+    >
+      SMS{active ? '' : ' · pending AT'}
+    </span>
+  );
+};
+
 export default function Senders() {
   const [senders, setSenders] = useState([]);
   const [platformSenders, setPlatformSenders] = useState([]);
@@ -16,7 +38,7 @@ export default function Senders() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [showSubmitted, setShowSubmitted] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '' });
+  const [form, setForm] = useState({ name: '', email: '', channels: ['email'] });
   const [deleteId, setDeleteId] = useState(null);
   const [error, setError] = useState('');
 
@@ -43,17 +65,35 @@ export default function Senders() {
     fetchPlatformSenders();
   }, []);
 
+  const toggleChannel = (channel) => {
+    setForm((prev) => {
+      const has = prev.channels.includes(channel);
+      const next = has
+        ? prev.channels.filter((c) => c !== channel)
+        : [...prev.channels, channel];
+      return { ...prev, channels: next.length ? next : ['email'] };
+    });
+  };
+
   const handleAdd = async (e) => {
     e.preventDefault();
     setError('');
+    if (!form.channels.length) {
+      setError('Select at least one channel');
+      return;
+    }
     try {
-      const res = await sendersAPI.add(form);
+      const res = await sendersAPI.add({
+        name: form.name,
+        email: form.email,
+        channels: form.channels,
+      });
       const data = res?.data;
       if (data?.success) {
         setSenders([data.sender, ...senders]);
         setShowAdd(false);
         setShowSubmitted(true);
-        setForm({ name: '', email: '' });
+        setForm({ name: '', email: '', channels: ['email'] });
       } else {
         setError(data?.error || 'Failed to add sender');
       }
@@ -90,7 +130,7 @@ export default function Senders() {
     <>
       <PageHeader
         title="Senders"
-        description="Manage verified sender emails"
+        description="Manage verified sender identities for email and SMS"
         action={
           <button onClick={() => setShowAdd(true)} className="btn-primary btn-sm">
             <FiPlus size={16} className="mr-1" /> Add Sender
@@ -119,13 +159,16 @@ export default function Senders() {
             {platformSenders.map((s) => (
               <div key={s._id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
                     {s.isDefault && (
                       <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
                         Recommended
                       </span>
                     )}
+                    {channelsOf(s).map((c) => (
+                      <ChannelBadge key={c} channel={c} active={!!s.atRegistered} />
+                    ))}
                   </div>
                   <p className="text-xs text-gray-500 font-mono truncate">{s.email}</p>
                   {s.description && (
@@ -145,7 +188,7 @@ export default function Senders() {
         <EmptyState
           icon={FiMail}
           title="No senders yet"
-          description="Add your own sender email, or use a platform sender above"
+          description="Add your own sender, or use a platform sender above"
           action={
             <button onClick={() => setShowAdd(true)} className="btn-primary btn-sm">
               Add Sender
@@ -159,6 +202,7 @@ export default function Senders() {
               <tr className="border-b border-gray-200">
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Name</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Email</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Channels</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Default</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -172,6 +216,13 @@ export default function Senders() {
                   <tr key={s._id} className="border-b border-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">{s.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{s.email}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1 flex-wrap">
+                        {channelsOf(s).map((c) => (
+                          <ChannelBadge key={c} channel={c} active={!!s.atRegistered} />
+                        ))}
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={status} />
                       {status === 'rejected' && s.rejectionReason && (
@@ -231,6 +282,36 @@ export default function Senders() {
               required
             />
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Channels</label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.channels.includes('email')}
+                  onChange={() => toggleChannel('email')}
+                  className="rounded"
+                />
+                Email
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.channels.includes('sms')}
+                  onChange={() => toggleChannel('sms')}
+                  className="rounded"
+                />
+                SMS
+              </label>
+            </div>
+            {form.channels.includes('sms') && (
+              <p className="text-xs text-gray-500 mt-2">
+                SMS requires Africa's Talking registration. Approval usually takes 1 business day.
+              </p>
+            )}
+          </div>
+
           <button type="submit" className="btn-primary w-full">Submit for Review</button>
         </form>
       </Modal>
@@ -242,6 +323,11 @@ export default function Senders() {
               Your sender has been submitted. Our team will review it and enable it for your account once approved.
               You'll be notified by email.
             </p>
+            {form.channels.includes('sms') && (
+              <p className="text-xs text-blue-700 mt-2">
+                SMS-enabled senders require registration with Africa's Talking — this may take 1 business day extra.
+              </p>
+            )}
           </div>
           <button onClick={() => setShowSubmitted(false)} className="btn-primary w-full">Got it</button>
         </div>
@@ -252,7 +338,7 @@ export default function Senders() {
         onClose={() => setDeleteId(null)}
         onConfirm={handleDelete}
         title="Delete Sender"
-        message="This sender will be removed. You won't be able to send from this address."
+        message="This sender will be removed. You won't be able to send from this identity."
         confirmText="Delete"
         danger
       />

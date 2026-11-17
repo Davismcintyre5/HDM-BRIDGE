@@ -24,6 +24,9 @@ import Renew from '@pages/app/Renew';
 import Team from '@pages/app/Team';
 import Settings from '@pages/app/Settings';
 import Developers from '@pages/app/Developers';
+import SmsSend from '@pages/app/SmsSend';
+import SmsWallet from '@pages/app/SmsWallet';
+import SmsLogs from '@pages/app/SmsLogs';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000 } },
@@ -55,6 +58,9 @@ export default function App() {
               <Route path="/senders" element={<ProtectedRoute><Senders /></ProtectedRoute>} />
               <Route path="/templates" element={<ProtectedRoute><Templates /></ProtectedRoute>} />
               <Route path="/logs" element={<ProtectedRoute><EmailLogs /></ProtectedRoute>} />
+              <Route path="/sms/send" element={<ProtectedRoute><SmsSend /></ProtectedRoute>} />
+              <Route path="/sms/wallet" element={<ProtectedRoute><SmsWallet /></ProtectedRoute>} />
+              <Route path="/sms/logs" element={<ProtectedRoute><SmsLogs /></ProtectedRoute>} />
               <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
               <Route path="/invoice/:invoiceNumber" element={<ProtectedRoute><Invoice /></ProtectedRoute>} />
               <Route path="/renew" element={<ProtectedRoute><Renew /></ProtectedRoute>} />

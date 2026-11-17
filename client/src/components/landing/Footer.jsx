@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import LegalModal from './LegalModal';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 export default function Footer() {
   const [modal, setModal] = useState(null);
   const [settings, setSettings] = useState({
@@ -8,15 +10,29 @@ export default function Footer() {
     contactPhone: '',
     appName: 'HDM BRIDGE',
   });
+  const [legal, setLegal] = useState({ terms: null, privacy: null });
 
   useEffect(() => {
     fetchSettings();
   }, []);
 
+  useEffect(() => {
+    if (!modal) return;
+    const type = modal === 'terms' ? 'terms_of_service' : 'privacy_policy';
+    if (legal[modal]) return;
+    fetch(`${API_URL}/landing/legal/${type}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.success && d.document) {
+          setLegal((prev) => ({ ...prev, [modal]: d.document }));
+        }
+      })
+      .catch(() => {});
+  }, [modal, legal]);
+
   const fetchSettings = async () => {
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const res = await fetch(`${API_URL.replace('/api', '')}/admin/api/system/public`);
+      const res = await fetch(`${API_URL}/landing/settings`);
       const data = await res.json();
       if (data.success && data.settings) {
         setSettings({
@@ -25,9 +41,7 @@ export default function Footer() {
           appName: data.settings.app_name || settings.appName,
         });
       }
-    } catch {
-      // Use defaults
-    }
+    } catch {}
   };
 
   return (
@@ -36,7 +50,6 @@ export default function Footer() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
 
-            {/* Brand */}
             <div>
               <div className="flex items-center space-x-2 mb-4">
                 <div className="h-8 w-8 bg-indigo-600 rounded-lg flex items-center justify-center">
@@ -45,11 +58,10 @@ export default function Footer() {
                 <span className="text-lg font-bold text-white">{settings.appName}</span>
               </div>
               <p className="text-sm text-gray-400 leading-relaxed">
-                Enterprise email sending platform. Simple API, reliable delivery, no SMTP hassle.
+                Enterprise email and SMS platform. Simple API, reliable delivery, no SMTP or gateway hassle.
               </p>
             </div>
 
-            {/* Product */}
             <div>
               <h4 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Product</h4>
               <ul className="space-y-2">
@@ -60,7 +72,6 @@ export default function Footer() {
               </ul>
             </div>
 
-            {/* Company */}
             <div>
               <h4 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Company</h4>
               <ul className="space-y-2">
@@ -70,7 +81,6 @@ export default function Footer() {
               </ul>
             </div>
 
-            {/* Contact */}
             <div>
               <h4 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Contact</h4>
               <ul className="space-y-2">
@@ -93,7 +103,6 @@ export default function Footer() {
 
           </div>
 
-          {/* Bottom bar */}
           <div className="mt-12 pt-8 border-t border-gray-800 flex flex-col sm:flex-row items-center justify-between">
             <p className="text-sm text-gray-500">
               &copy; {new Date().getFullYear()} {settings.appName}. All rights reserved.
@@ -106,28 +115,24 @@ export default function Footer() {
         </div>
       </footer>
 
-      <LegalModal isOpen={modal === 'terms'} onClose={() => setModal(null)} title="Terms of Service">
-        <h4 className="font-semibold text-gray-900 mb-2">1. Acceptance of Terms</h4>
-        <p className="mb-4">By accessing and using {settings.appName}, you agree to be bound by these Terms of Service.</p>
-        <h4 className="font-semibold text-gray-900 mb-2">2. Description of Service</h4>
-        <p className="mb-4">{settings.appName} provides an email sending platform for transactional and marketing emails via API or SMTP.</p>
-        <h4 className="font-semibold text-gray-900 mb-2">3. User Obligations</h4>
-        <p className="mb-4">You agree to use the service in compliance with all applicable laws and regulations.</p>
-        <h4 className="font-semibold text-gray-900 mb-2">4. Prohibited Activities</h4>
-        <p className="mb-4">You may not use the service for spam, phishing, or any illegal activities.</p>
-        <h4 className="font-semibold text-gray-900 mb-2">5. Limitation of Liability</h4>
-        <p>{settings.appName} is provided "as is" without any warranties.</p>
+      <LegalModal isOpen={modal === 'terms'} onClose={() => setModal(null)} title={legal.terms?.title || 'Terms of Service'}>
+        {legal.terms ? (
+          <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
+            {legal.terms.content}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">Loading…</p>
+        )}
       </LegalModal>
 
-      <LegalModal isOpen={modal === 'privacy'} onClose={() => setModal(null)} title="Privacy Policy">
-        <h4 className="font-semibold text-gray-900 mb-2">1. Information Collection</h4>
-        <p className="mb-4">We collect information necessary to provide our email sending services.</p>
-        <h4 className="font-semibold text-gray-900 mb-2">2. Use of Information</h4>
-        <p className="mb-4">Your data is used solely for providing and improving our services.</p>
-        <h4 className="font-semibold text-gray-900 mb-2">3. Data Protection</h4>
-        <p className="mb-4">We implement security measures including encryption and secure access controls.</p>
-        <h4 className="font-semibold text-gray-900 mb-2">4. Your Rights</h4>
-        <p>You have the right to access, correct, or delete your data at any time.</p>
+      <LegalModal isOpen={modal === 'privacy'} onClose={() => setModal(null)} title={legal.privacy?.title || 'Privacy Policy'}>
+        {legal.privacy ? (
+          <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
+            {legal.privacy.content}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">Loading…</p>
+        )}
       </LegalModal>
     </>
   );

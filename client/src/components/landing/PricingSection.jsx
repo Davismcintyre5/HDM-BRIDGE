@@ -5,29 +5,36 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export default function PricingSection() {
   const [plans, setPlans] = useState([]);
+  const [smsRate, setSmsRate] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchPlans();
-  }, []);
+    let cancelled = false;
 
-  const fetchPlans = async () => {
-    try {
-      const res = await fetch(`${API_URL}/landing/plans`);
-      const data = await res.json();
-      if (data.success) {
-        setPlans(data.plans || []);
+    const load = async () => {
+      try {
+        const [plansRes, smsRes] = await Promise.all([
+          fetch(`${API_URL}/landing/plans`).then((r) => r.json()).catch(() => null),
+          fetch(`${API_URL}/landing/sms-config`).then((r) => r.json()).catch(() => null),
+        ]);
+        if (cancelled) return;
+        if (plansRes?.success) setPlans(plansRes.plans || []);
+        if (smsRes?.success) setSmsRate(smsRes.config.rateKes);
+      } catch {
+        if (cancelled) return;
+        setPlans([
+          { name: 'Free', tier: 'free', price: { amount: 0 }, convertedPrice: { formatted: '—', amount: 0 }, limits: { monthlyEmails: 3000 }, metadata: { isRecommended: false } },
+          { name: 'Pro', tier: 'pro', price: { amount: 19 }, convertedPrice: { formatted: '—', amount: 19 }, limits: { monthlyEmails: 50000 }, metadata: { isRecommended: true, badge: 'Popular' } },
+          { name: 'Pro+', tier: 'proplus', price: { amount: 79 }, convertedPrice: { formatted: '—', amount: 79 }, limits: { monthlyEmails: 500000 }, metadata: { isRecommended: false, badge: 'Best Value' } },
+        ]);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    } catch (err) {
-      setPlans([
-        { name: 'Free', tier: 'free', price: { amount: 0 }, convertedPrice: { formatted: '—', amount: 0 }, limits: { monthlyEmails: 3000 }, metadata: { isRecommended: false } },
-        { name: 'Pro', tier: 'pro', price: { amount: 19 }, convertedPrice: { formatted: '—', amount: 19 }, limits: { monthlyEmails: 50000 }, metadata: { isRecommended: true, badge: 'Popular' } },
-        { name: 'Pro+', tier: 'proplus', price: { amount: 79 }, convertedPrice: { formatted: '—', amount: 79 }, limits: { monthlyEmails: 500000 }, metadata: { isRecommended: false, badge: 'Best Value' } },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, []);
 
   if (loading) {
     return (
@@ -48,7 +55,7 @@ export default function PricingSection() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           {plans.map((plan, i) => (
-            <PricingCard key={i} plan={plan} />
+            <PricingCard key={i} plan={plan} smsRateKes={smsRate} />
           ))}
         </div>
       </div>

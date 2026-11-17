@@ -7,9 +7,9 @@ const staticRoutes = [
   {
     path: '/',
     tags: {
-      title: 'HDM Bridge — Enterprise Email Sending Platform',
+      title: 'HDM Bridge — Email & SMS API for Developers',
       description:
-        'HDM Bridge lets developers send emails directly from their project server. Transactional email, API keys, custom domains, and delivery logs. Built by HDM Technologies.',
+        'HDM Bridge lets developers send transactional email and SMS from their app via a simple API. 3,000 free emails/month, pay-as-you-go SMS. Built by HDM Technologies.',
     },
   },
   {
@@ -23,7 +23,7 @@ const staticRoutes = [
     path: '/register',
     tags: {
       title: 'Create Account — HDM Bridge',
-      description: 'Create your HDM Bridge account and start sending transactional email from your project server.',
+      description: 'Create your HDM Bridge account and start sending transactional email and SMS from your project server.',
     },
   },
   {
