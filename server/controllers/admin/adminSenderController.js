@@ -33,7 +33,7 @@ const getSenders = async (req, res, next) => {
 
 const createSender = async (req, res, next) => {
   try {
-    const { name, email, description, verifiedInBrevo } = req.body;
+    const { name, email, description, verifiedInBrevo, channels } = req.body;
     if (!name || !email) {
       return next(new AppError('Name and email are required', 400, 'VALIDATION_001'));
     }
@@ -44,11 +44,14 @@ const createSender = async (req, res, next) => {
       return next(new AppError('Platform sender already exists', 409, 'CONFLICT_001'));
     }
 
+    const chan = Array.isArray(channels) && channels.length > 0 ? channels : ['email'];
+
     const sender = await PlatformSender.create({
       name,
       email: normalizedEmail,
       description,
       domain: normalizedEmail.split('@').pop(),
+      channels: chan,
       verificationStatus: verifiedInBrevo ? 'verified' : 'pending',
       isVerified: !!verifiedInBrevo,
       isActive: true,
@@ -93,14 +96,26 @@ const approveSender = async (req, res, next) => {
       return next(new AppError('Sender is already verified', 400, 'VALIDATION_001'));
     }
 
+    const hasSms = Array.isArray(sender.channels) && sender.channels.includes('sms');
+    const { atRegistered } = req.body;
+
+    if (hasSms && atRegistered !== true) {
+      return next(new AppError(
+        'This platform sender is for SMS. Confirm AT registration before approving.',
+        400,
+        'SMS_AT_REGISTRATION_REQUIRED'
+      ));
+    }
+
     sender.verificationStatus = 'verified';
     sender.isVerified = true;
+    sender.atRegistered = hasSms ? new Date() : null;
     sender.verifiedAt = new Date();
     sender.rejectionReason = undefined;
     sender.rejectedAt = undefined;
     await sender.save();
 
-    logger.info('Platform sender approved: ' + sender.email);
+    logger.info('Platform sender approved: ' + sender.email + ' channels=' + sender.channels.join(','));
     res.status(200).json({ success: true, sender });
   } catch (error) { next(error); }
 };
@@ -231,18 +246,31 @@ const approveClientSender = async (req, res, next) => {
     });
     if (!sender) return next(new AppError('Pending sender not found', 404, 'NOT_FOUND'));
 
+    const hasSms = Array.isArray(sender.channels) && sender.channels.includes('sms');
+    const { atRegistered } = req.body;
+
+    if (hasSms && atRegistered !== true) {
+      return next(new AppError(
+        'This sender is for SMS. Confirm it is registered in Africa\'s Talking before approving.',
+        400,
+        'SMS_AT_REGISTRATION_REQUIRED'
+      ));
+    }
+
     sender.reviewStatus = 'approved';
     sender.isVerified = true;
+    sender.atRegistered = hasSms ? new Date() : null;
     sender.reviewedAt = new Date();
-    sender.reviewedBy = req.user?._id || null;
+    sender.reviewedBy = req.admin?._id || null;
     sender.rejectionReason = undefined;
     sender.rejectedAt = undefined;
     await sender.save();
 
     await invalidateUsageCache(sender.organizationId, 'senders');
-    logger.info('Client sender approved: ' + sender.email);
+    logger.info('Client sender approved: ' + sender.email + ' channels=' + sender.channels.join(','));
 
-    notifyClientOfSenderReview({ templateKey: 'senderApproved', sender });
+    const templateKey = hasSms ? 'smsSenderApproved' : 'senderApproved';
+    notifyClientOfSenderReview({ templateKey, sender });
 
     res.status(200).json({
       success: true,
@@ -266,19 +294,21 @@ const rejectClientSender = async (req, res, next) => {
     if (!sender) return next(new AppError('Pending sender not found', 404, 'NOT_FOUND'));
 
     const trimmedReason = String(reason).trim();
+    const hasSms = Array.isArray(sender.channels) && sender.channels.includes('sms');
 
     sender.reviewStatus = 'rejected';
     sender.isVerified = false;
     sender.rejectionReason = trimmedReason;
     sender.rejectedAt = new Date();
-    sender.reviewedBy = req.user?._id || null;
+    sender.reviewedBy = req.admin?._id || null;
     await sender.save();
 
     await invalidateUsageCache(sender.organizationId, 'senders');
     logger.info('Client sender rejected: ' + sender.email + ' — ' + trimmedReason);
 
+    const templateKey = hasSms ? 'smsSenderRejected' : 'senderRejected';
     notifyClientOfSenderReview({
-      templateKey: 'senderRejected',
+      templateKey,
       sender,
       data: { reason: trimmedReason },
     });

@@ -4,6 +4,7 @@ const { getRedisClient } = require('../../config/redis');
 const queueService = require('../../services/queueService');
 const Backup = require('../../models/admin/Backup');
 const AIWidgetSetting = require('../../models/admin/AIWidgetSetting');
+const PlatformSender = require('../../models/admin/Sender');
 const logger = require('../../utils/logger');
 
 function humanUptime(seconds) {
@@ -28,11 +29,7 @@ function maskEmail(email) {
 
 function hostFromUrl(url) {
   if (!url) return '';
-  try {
-    return new URL(url).host;
-  } catch {
-    return '';
-  }
+  try { return new URL(url).host; } catch { return ''; }
 }
 
 const getHealthFull = async (req, res) => {
@@ -47,9 +44,8 @@ const getHealthFull = async (req, res) => {
   };
 
   /* server */
-  const serverStatus = 'up';
   const serverBlock = {
-    status: serverStatus,
+    status: 'up',
     node: process.version,
     platform: process.platform,
     arch: process.arch,
@@ -60,7 +56,7 @@ const getHealthFull = async (req, res) => {
     memoryHeapMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
     env: process.env.NODE_ENV || 'development',
   };
-  track(serverStatus);
+  track(serverBlock.status);
 
   /* database */
   const dbState = mongoose.connection.readyState;
@@ -94,9 +90,7 @@ const getHealthFull = async (req, res) => {
     redisLatencyMs = Date.now() - t0;
     redisStatus = 'connected';
     redisHost = hostFromUrl(process.env.REDIS_URL);
-  } catch {
-    redisStatus = 'disconnected';
-  }
+  } catch {}
   const redisBlock = {
     status: redisStatus,
     enabled: true,
@@ -121,13 +115,57 @@ const getHealthFull = async (req, res) => {
   track(emailStatus);
 
   /* sms */
-  const smsStatus = brevoKeys.length > 0 ? 'enabled' : 'misconfigured';
-  const smsBlock = {
-    status: smsStatus,
-    provider: 'Brevo',
-    sender: process.env.SMTP_FROM_NAME || 'HDM BRIDGE',
+  let smsBlock = {
+    status: 'disabled',
+    enabled: false,
+    configured: false,
+    provider: "Africa's Talking",
+    username: '',
+    senderMode: 'at_default',
+    senderId: '(AT default)',
+    rateKes: null,
   };
-  track(smsStatus);
+  try {
+    const { isSmsEnabled } = require('../../middleware/common/smsGate');
+    const smsPricingService = require('../../services/smsPricingService');
+    const smsService = require('../../services/smsService');
+
+    const smsConfigured = smsService.isConfigured();
+    const smsEnabled = await isSmsEnabled();
+    const rateKes = await smsPricingService.getRate();
+    const platformDefault = await smsPricingService.getDefaultSender();
+
+    let resolvedDefault = platformDefault || process.env.AT_SENDER_ID || null;
+    if (resolvedDefault) {
+      const ok = await PlatformSender.findOne({
+        name: resolvedDefault,
+        verificationStatus: 'verified',
+        isActive: true,
+        atRegistered: { $ne: null },
+      }).lean();
+      if (!ok) resolvedDefault = null;
+    }
+
+    let smsStatus = 'disabled';
+    if (!smsConfigured) smsStatus = 'misconfigured';
+    else if (!smsEnabled) smsStatus = 'disabled';
+    else smsStatus = 'enabled';
+
+    smsBlock = {
+      status: smsStatus,
+      enabled: smsEnabled,
+      configured: smsConfigured,
+      provider: "Africa's Talking",
+      username: process.env.AT_USERNAME || '',
+      senderMode: resolvedDefault ? 'explicit' : 'at_default',
+      senderId: resolvedDefault || '(AT default)',
+      rateKes,
+    };
+  } catch (err) {
+    logger.error('Health: SMS block failed: ' + err.message);
+    smsBlock.status = 'misconfigured';
+  }
+  track(smsBlock.status);
 
   /* queues */
   let queueStatus = 'degraded';
@@ -145,7 +183,7 @@ const getHealthFull = async (req, res) => {
   const stripeEnabled = !!process.env.STRIPE_SECRET_KEY && !String(process.env.STRIPE_SECRET_KEY).startsWith('sk_live_xxx');
   const stripeBlock = {
     status: stripeEnabled ? 'enabled' : 'disabled',
-    mode: process.env.STRIPE_MODE || (String(process.env.STRIPE_SECRET_KEY).startsWith('sk_live_') ? 'live' : 'test'),
+    mode: process.env.STRIPE_MODE || (String(process.env.STRIPE_SECRET_KEY || '').startsWith('sk_live_') ? 'live' : 'test'),
   };
   track(stripeBlock.status);
 

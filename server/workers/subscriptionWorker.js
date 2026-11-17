@@ -8,13 +8,16 @@ const Subscription = require('../models/client/Subscription');
 const Plan = require('../models/client/Plan');
 const Invoice = require('../models/client/Invoice');
 const User = require('../models/client/User');
+const SmsWallet = require('../models/client/SmsWallet');
 const emailService = require('../services/emailService');
 const rateLimitService = require('../services/rateLimitService');
 const invoiceService = require('../services/invoiceService');
+const smsPricingService = require('../services/smsPricingService');
 const { invalidateSubscriptionState } = require('../middleware/client/requireActiveSubscription');
 const logger = require('../utils/logger');
 
 const REMINDER_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000;
+const SMS_REMINDER_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000;
 
 async function ensureRedis() {
   try {
@@ -311,13 +314,75 @@ async function pass3RemindFrozen(now, freePlanId) {
   return { reminded };
 }
 
+async function pass4RemindLowSmsBalance(now) {
+  const threshold = await smsPricingService.getLowBalanceThreshold();
+  const cutoff = new Date(now.getTime() - SMS_REMINDER_INTERVAL_MS);
+
+  const wallets = await SmsWallet.find({
+    balance: { $lt: threshold },
+    $or: [
+      { lastLowBalanceReminderAt: null },
+      { lastLowBalanceReminderAt: { $exists: false } },
+      { lastLowBalanceReminderAt: { $lt: cutoff } },
+    ],
+  }).lean();
+
+  if (wallets.length === 0) {
+    logger.info('[subscriptionWorker] Pass 4: no low-balance SMS wallets');
+    return { reminded: 0 };
+  }
+
+  let reminded = 0;
+
+  for (const w of wallets) {
+    try {
+      const owner = await getOwner(w.organizationId);
+      if (!owner?.email) continue;
+
+      const topupUrl = (process.env.CLIENT_URL || '') + '/sms/wallet';
+
+      await emailService.send(
+        owner.email,
+        'smsLowBalance',
+        {
+          firstName: owner.firstName,
+          balance: w.balance,
+          threshold,
+          topupUrl,
+        },
+        {
+          priority: 'normal',
+          source: 'system',
+          organizationId: w.organizationId,
+          userId: owner._id,
+          tags: ['sms', 'low-balance'],
+        }
+      ).catch((err) =>
+        logger.error('[subscriptionWorker] smsLowBalance email failed: ' + err.message)
+      );
+
+      await SmsWallet.updateOne(
+        { _id: w._id },
+        { $set: { lastLowBalanceReminderAt: now } }
+      );
+
+      reminded += 1;
+    } catch (err) {
+      logger.error('[subscriptionWorker] Pass 4 failed for wallet ' + w._id + ': ' + err.message);
+    }
+  }
+
+  logger.info('[subscriptionWorker] Pass 4: sent ' + reminded + ' low-balance reminders');
+  return { reminded };
+}
+
 async function runOnce() {
   const now = new Date();
   const freePlanId = await getFreePlanId();
 
   logger.info('[subscriptionWorker] Run started');
 
-  const [p1, p2, p3] = await Promise.all([
+  const [p1, p2, p3, p4] = await Promise.all([
     pass1GenerateRenewalInvoices(now, freePlanId).catch((err) => {
       logger.error('[subscriptionWorker] Pass 1 threw: ' + err.message);
       return { generated: 0 };
@@ -330,6 +395,10 @@ async function runOnce() {
       logger.error('[subscriptionWorker] Pass 3 threw: ' + err.message);
       return { reminded: 0 };
     }),
+    pass4RemindLowSmsBalance(now).catch((err) => {
+      logger.error('[subscriptionWorker] Pass 4 threw: ' + err.message);
+      return { reminded: 0 };
+    }),
   ]);
 
   logger.info('[subscriptionWorker] Run complete: ' + JSON.stringify({
@@ -337,9 +406,10 @@ async function runOnce() {
     frozen: p2.frozen,
     healed: p2.healed,
     reminded: p3.reminded,
+    smsReminded: p4.reminded,
   }));
 
-  return { p1, p2, p3 };
+  return { p1, p2, p3, p4 };
 }
 
 let task = null;

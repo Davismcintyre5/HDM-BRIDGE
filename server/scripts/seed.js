@@ -17,6 +17,10 @@ const AIWidgetSetting = require('../models/admin/AIWidgetSetting');
 const AdminRole = require('../models/admin/AdminRole');
 const AdminUser = require('../models/admin/AdminUser');
 const Backup = require('../models/admin/Backup');
+const SmsWallet = require('../models/client/SmsWallet');
+const Organization = require('../models/client/Organization');
+const ClientSender = require('../models/client/Sender');
+const PlatformSender = require('../models/admin/Sender');
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -38,6 +42,7 @@ async function mainMenu() {
   console.log('║  6. Seed Admin Roles & Default Admin     ║');
   console.log('║  7. Seed AI Widget Settings              ║');
   console.log('║  8. Seed Backup Config                   ║');
+  console.log('║  9. Seed SMS (Settings, Wallets, Senders)║');
   console.log('║  0. Exit                                 ║');
   console.log('╚══════════════════════════════════════════╝\n');
 
@@ -52,6 +57,7 @@ async function mainMenu() {
     case '6': await seedAdminRoles(); break;
     case '7': await seedAIWidget(); break;
     case '8': await seedBackup(); break;
+    case '9': await seedSms(); break;
     case '0':
       console.log('\n👋 Goodbye!\n');
       process.exit(0);
@@ -71,6 +77,7 @@ async function seedAll() {
   await seedAdminRoles();
   await seedAIWidget();
   await seedBackup();
+  await seedSms();
   console.log('\n✅ All seeding complete!\n');
   await question('Press Enter to continue...');
   await mainMenu();
@@ -78,7 +85,7 @@ async function seedAll() {
 
 async function seedSettings() {
   console.log('📝 Seeding System Settings...');
-  
+
   const settings = [
     { key: 'app_name', value: 'HDM BRIDGE', type: 'string', group: 'general', description: 'Platform name' },
     { key: 'app_logo', value: '/logo.png', type: 'string', group: 'general', description: 'Logo URL' },
@@ -299,6 +306,7 @@ async function seedPlans() {
 
   console.log(`  ✅ ${plans.length} plans seeded`);
 }
+
 async function seedPaymentAndCurrencies() {
   console.log('💰 Seeding Payment Methods...');
 
@@ -330,24 +338,24 @@ async function seedPaymentAndCurrencies() {
       supportedCurrencies: ['USD', 'EUR', 'GBP'],
       minimumAmount: 1,
     },
-{
-  name: 'M-Pesa',
-  slug: 'mpesa',
-  type: 'mpesa',
-  isEnabled: false,
-  displayName: 'M-Pesa',
-  description: 'Pay via M-Pesa mobile money',
-  icon: 'mpesa',
-  sortOrder: 3,
-  configuration: {
-    paybill: { enabled: false, paybillNumber: '', passkey: '' },
-    till: { enabled: false, tillNumber: '', passkey: '' },
-    stkPush: { enabled: false, shortcode: '', passkey: '' },
-    sendMoney: { enabled: false, phoneNumber: '' },
-  },
-  supportedCurrencies: ['KES'],
-  minimumAmount: 1,
-},
+    {
+      name: 'M-Pesa',
+      slug: 'mpesa',
+      type: 'mpesa',
+      isEnabled: false,
+      displayName: 'M-Pesa',
+      description: 'Pay via M-Pesa mobile money',
+      icon: 'mpesa',
+      sortOrder: 3,
+      configuration: {
+        paybill: { enabled: false, paybillNumber: '', passkey: '' },
+        till: { enabled: false, tillNumber: '', passkey: '' },
+        stkPush: { enabled: false, shortcode: '', passkey: '' },
+        sendMoney: { enabled: false, phoneNumber: '' },
+      },
+      supportedCurrencies: ['KES'],
+      minimumAmount: 1,
+    },
     {
       name: 'Bank Transfer',
       slug: 'bank_transfer',
@@ -698,6 +706,49 @@ async function seedBackup() {
   } else {
     console.log('  ℹ️  Backup schedule already exists');
   }
+}
+
+async function seedSms() {
+  console.log('💬 Seeding SMS (settings, wallets, sender channels)...');
+
+  const smsSettings = [
+    { key: 'sms_enabled', value: false, type: 'boolean', group: 'sms', description: 'Master switch for all SMS endpoints' },
+    { key: 'sms_rate_kes', value: 1.0, type: 'number', group: 'sms', description: 'User-facing price per SMS in KES' },
+    { key: 'sms_min_topup_kes', value: 10, type: 'number', group: 'sms', description: 'Minimum SMS wallet top-up in KES' },
+    { key: 'sms_low_balance_kes', value: 10, type: 'number', group: 'sms', description: 'Low balance threshold for reminder emails' },
+    { key: 'sms_default_sender', value: '', type: 'string', group: 'sms', description: 'Platform default sender ID (blank = AT default)' },
+  ];
+
+  for (const s of smsSettings) {
+    await SystemSetting.findOneAndUpdate(
+      { key: s.key },
+      { $setOnInsert: s },
+      { upsert: true }
+    );
+  }
+  console.log(`  ✅ ${smsSettings.length} SMS settings ready (idempotent)`);
+
+  const orgs = await Organization.find().select('_id').lean();
+  let walletsCreated = 0;
+  for (const org of orgs) {
+    const res = await SmsWallet.updateOne(
+      { organizationId: org._id },
+      { $setOnInsert: { organizationId: org._id, balance: 0, currency: 'KES' } },
+      { upsert: true }
+    );
+    if (res.upsertedCount) walletsCreated++;
+  }
+  console.log(`  ✅ wallets: ${walletsCreated} created, ${orgs.length - walletsCreated} existing`);
+
+  const clientRes = await ClientSender.updateMany(
+    { channels: { $exists: false } },
+    { $set: { channels: ['email'], atRegistered: null } }
+  );
+  const platformRes = await PlatformSender.updateMany(
+    { channels: { $exists: false } },
+    { $set: { channels: ['email'], atRegistered: null } }
+  );
+  console.log(`  ✅ senders migrated: client=${clientRes.modifiedCount}, platform=${platformRes.modifiedCount}`);
 }
 
 async function start() {

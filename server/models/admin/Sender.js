@@ -31,6 +31,15 @@ const platformSenderSchema = new mongoose.Schema(
       default: true,
       index: true,
     },
+    channels: {
+      type: [String],
+      enum: ['email', 'sms'],
+      default: ['email'],
+    },
+    atRegistered: {
+      type: Date,
+      default: null,
+    },
     verificationStatus: {
       type: String,
       enum: ['verified', 'pending', 'rejected'],

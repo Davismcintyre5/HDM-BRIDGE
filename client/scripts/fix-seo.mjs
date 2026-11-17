@@ -20,6 +20,14 @@ if (!existsSync(indexPath)) {
 
 let html = readFileSync(indexPath, 'utf-8');
 
+// Ensure viewport meta is present
+if (!html.includes('name="viewport"')) {
+  html = html.replace(
+    /<head([^>]*)>/i,
+    '<head$1>\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />'
+  );
+}
+
 html = html.replace(/<meta name="author" content="[^"]*"\s*\/?>\s*\n?/gi, '');
 html = html.replace(/<meta name="keywords" content="[^"]*"\s*\/?>\s*\n?/gi, '');
 html = html.replace(/<meta property="og:[^"]*"[^>]*>\s*\n?/gi, '');
@@ -50,6 +58,15 @@ function walk(dir) {
       walk(full);
     } else if (entry === 'index.html' && full !== indexPath) {
       let sub = readFileSync(full, 'utf-8');
+
+      // Ensure viewport meta on every sub-route
+      if (!sub.includes('name="viewport"')) {
+        sub = sub.replace(
+          /<head([^>]*)>/i,
+          '<head$1>\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />'
+        );
+      }
+
       sub = sub.replace(/<meta name="author" content="[^"]*"\s*\/?>\s*\n?/gi, '');
       sub = sub.replace(/<meta name="keywords" content="[^"]*"\s*\/?>\s*\n?/gi, '');
       writeFileSync(full, sub, 'utf-8');

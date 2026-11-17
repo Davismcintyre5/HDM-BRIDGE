@@ -8,6 +8,32 @@ const {
   resolveCompositeId,
 } = require('../../utils/paymentMethodAdapter');
 
+const SMS_SETTING_KEYS = [
+  'sms_enabled',
+  'sms_rate_kes',
+  'sms_min_topup_kes',
+  'sms_low_balance_kes',
+  'sms_default_sender',
+];
+
+async function invalidateSmsCaches(keys) {
+  try {
+    if (keys.includes('sms_enabled')) {
+      const { invalidateSmsEnabledCache } = require('../../middleware/common/smsGate');
+      await invalidateSmsEnabledCache();
+    }
+    const pricingKeys = keys.filter(k => k !== 'sms_enabled' && SMS_SETTING_KEYS.includes(k));
+    if (pricingKeys.length > 0) {
+      const smsPricingService = require('../../services/smsPricingService');
+      for (const k of pricingKeys) {
+        await smsPricingService.invalidateCache(k);
+      }
+    }
+  } catch (err) {
+    logger.error('invalidateSmsCaches failed: ' + err.message);
+  }
+}
+
 const getSettings = async (req, res, next) => {
   try {
     const settings = await SystemSetting.find();
@@ -30,7 +56,17 @@ const updateSetting = async (req, res, next) => {
   try {
     const { key, value } = req.body;
     if (!key) return next(new AppError('Setting key is required', 400, 'VALIDATION_001'));
-    const setting = await SystemSetting.findOneAndUpdate({ key }, { value }, { upsert: true, new: true });
+
+    const setting = await SystemSetting.findOneAndUpdate(
+      { key },
+      { value },
+      { upsert: true, new: true }
+    );
+
+    if (SMS_SETTING_KEYS.includes(key)) {
+      await invalidateSmsCaches([key]);
+    }
+
     logger.info('Admin updated system setting: ' + key);
     res.status(200).json({ success: true, setting });
   } catch (error) { next(error); }
@@ -39,9 +75,24 @@ const updateSetting = async (req, res, next) => {
 const bulkUpdateSettings = async (req, res, next) => {
   try {
     const { settings } = req.body;
-    if (!settings || typeof settings !== 'object') return next(new AppError('Settings object is required', 400, 'VALIDATION_001'));
-    const updates = Object.entries(settings).map(([key, value]) => ({ updateOne: { filter: { key }, update: { $set: { key, value } }, upsert: true } }));
+    if (!settings || typeof settings !== 'object') {
+      return next(new AppError('Settings object is required', 400, 'VALIDATION_001'));
+    }
+
+    const updates = Object.entries(settings).map(([key, value]) => ({
+      updateOne: {
+        filter: { key },
+        update: { $set: { key, value } },
+        upsert: true,
+      },
+    }));
     await SystemSetting.bulkWrite(updates);
+
+    const touchedSms = Object.keys(settings).filter(k => SMS_SETTING_KEYS.includes(k));
+    if (touchedSms.length > 0) {
+      await invalidateSmsCaches(touchedSms);
+    }
+
     logger.info('Admin bulk updated system settings');
     res.status(200).json({ success: true, message: 'Settings updated' });
   } catch (error) { next(error); }
@@ -141,14 +192,23 @@ const getPublicPaymentMethods = async (req, res) => {
   }
 };
 
-const getSystemHealth = async (req, res) => {
+const getSystemHealth = async (req, res, next) => {
   try {
     const mongoose = require('mongoose');
     const { getRedisClient } = require('../../config/redis');
     const dbStatus = mongoose.connection.readyState === 1;
     let redisStatus = false;
     try { const redis = getRedisClient(); await redis.ping(); redisStatus = true; } catch {}
-    res.status(200).json({ success: true, health: { server: 'running', database: dbStatus ? 'connected' : 'disconnected', redis: redisStatus ? 'connected' : 'disconnected', uptime: process.uptime(), timestamp: new Date() } });
+    res.status(200).json({
+      success: true,
+      health: {
+        server: 'running',
+        database: dbStatus ? 'connected' : 'disconnected',
+        redis: redisStatus ? 'connected' : 'disconnected',
+        uptime: process.uptime(),
+        timestamp: new Date(),
+      },
+    });
   } catch (error) { next(error); }
 };
 

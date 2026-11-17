@@ -1055,6 +1055,161 @@ async function renewalReminder({ firstName, invoiceNumber, planName, amount, cur
   });
 }
 
+async function smsTopUpConfirmed({ firstName, amountKes, units, newBalance, method, reference, paidAt }) {
+  return render({
+    subject: `SMS wallet topped up — KSh ${Number(amountKes || 0).toLocaleString()}`,
+    headerColor: '#059669',
+    headerTitle: 'SMS wallet topped up',
+    body: `
+      <h2>Hi ${esc(firstName || 'there')},</h2>
+      ${alertBox('success', 'Your SMS wallet has been topped up successfully.')}
+      <div class="box box-green">
+        ${dataRow('Amount paid', money(amountKes, 'KES'))}
+        ${dataRow('SMS credits', `~${Number(units || 0).toLocaleString()}`)}
+        ${dataRow('New balance', money(newBalance, 'KES'))}
+        ${dataRow('Method', method || 'M-Pesa')}
+        ${dataRow('Reference', reference, true)}
+        ${dataRow('Date', fmtDateTime(paidAt || new Date()))}
+      </div>
+      <p>You can now send SMS from your dashboard or via the API.</p>
+      ${button((await loadBranding()).clientUrl + '/sms/wallet', 'Go to SMS Wallet')}
+    `,
+  });
+}
+
+async function smsLowBalance({ firstName, balance, threshold, topupUrl }) {
+  return render({
+    subject: 'Your SMS balance is running low',
+    headerColor: '#eab308',
+    headerTitle: 'Low SMS balance',
+    body: `
+      <h2>Hi ${esc(firstName || 'there')},</h2>
+      ${alertBox('warning', 'Your SMS wallet balance is below the reminder threshold.')}
+      <div class="box box-yellow">
+        ${dataRow('Current balance', money(balance, 'KES'))}
+        ${dataRow('Threshold', money(threshold, 'KES'))}
+      </div>
+      <p>Top up now to keep sending SMS without interruption.</p>
+      ${button(topupUrl || ((await loadBranding()).clientUrl + '/sms/wallet'), 'Top Up Now')}
+    `,
+  });
+}
+
+async function smsSenderApproved({ firstName, senderName, senderEmail, sendersUrl }) {
+  return render({
+    subject: `SMS sender approved: ${senderName || senderEmail}`,
+    headerColor: '#059669',
+    headerTitle: 'SMS sender approved',
+    body: `
+      <h2>Hi ${esc(firstName || 'there')},</h2>
+      ${alertBox('success', `Your SMS sender <strong>${esc(senderName || senderEmail)}</strong> has been approved and registered with our SMS provider.`)}
+      <div class="box box-green">
+        ${dataRow('Sender name', senderName)}
+        ${dataRow('Sender email', senderEmail, true)}
+      </div>
+      <p>You can now use this sender to send SMS from your dashboard or via the API.</p>
+      ${button(sendersUrl || ((await loadBranding()).clientUrl + '/senders'), 'Manage Senders')}
+    `,
+  });
+}
+
+async function smsSenderRejected({ firstName, senderName, senderEmail, reason, sendersUrl }) {
+  return render({
+    subject: `SMS sender not approved: ${senderName || senderEmail}`,
+    headerColor: '#dc2626',
+    headerTitle: 'SMS sender not approved',
+    body: `
+      <h2>Hi ${esc(firstName || 'there')},</h2>
+      ${alertBox('danger', `Your SMS sender <strong>${esc(senderName || senderEmail)}</strong> was not approved by our SMS provider.`)}
+      <div class="box box-red">
+        ${dataRow('Sender name', senderName)}
+        ${dataRow('Sender email', senderEmail, true)}
+        ${reason ? dataRow('Reason', reason) : ''}
+      </div>
+      <p>You can fix the issue and resubmit — or contact support if you think this is a mistake.</p>
+      ${button(sendersUrl || ((await loadBranding()).clientUrl + '/senders'), 'Go to Senders', true)}
+    `,
+  });
+}
+
+async function adminNewSmsSenderApplication({
+  adminName,
+  senderName,
+  senderEmail,
+  domain,
+  orgName,
+  userName,
+  userEmail,
+  submittedAt,
+  reviewUrl,
+}) {
+  return render({
+    subject: `New SMS sender application: ${senderName || senderEmail}`,
+    headerColor: '#4F46E5',
+    headerTitle: 'New SMS sender application',
+    body: `
+      <h2>Hi ${esc(adminName || 'there')},</h2>
+      <p>A customer has submitted a new sender for SMS use. This requires registration with Africa's Talking before approval.</p>
+      ${alertBox('warning', '<strong>Before approving:</strong> register this Sender ID in Africa\'s Talking and wait for confirmation.')}
+      <div class="box box-yellow">
+        ${dataRow('Sender name', senderName)}
+        ${dataRow('Sender email', senderEmail, true)}
+        ${dataRow('Domain', domain)}
+        ${dataRow('Organization', orgName)}
+        ${dataRow('Submitted by', userName ? `${userName} (${userEmail || ''})` : userEmail)}
+        ${dataRow('Submitted', fmtDateTime(submittedAt))}
+      </div>
+      <div class="box">
+        <h3>Approval steps</h3>
+        <ol>
+          <li>Log into Africa's Talking dashboard</li>
+          <li>Register the Sender ID under your app</li>
+          <li>Wait for AT approval (usually same day)</li>
+          <li>Return to Bridge and click Approve with "Registered in AT" checked</li>
+        </ol>
+      </div>
+      ${button(reviewUrl || ((await loadBranding()).adminUrl + '/senders'), 'Review in Admin')}
+    `,
+  });
+}
+
+async function adminSmsProviderDry({
+  adminName,
+  orgName,
+  orgId,
+  attemptedTo,
+  contentPreview,
+  atUsername,
+  occurredAt,
+}) {
+  return render({
+    subject: "⚠️ Africa's Talking balance exhausted",
+    headerColor: '#dc2626',
+    headerTitle: "AT balance exhausted",
+    body: `
+      <h2>Hi ${esc(adminName || 'there')},</h2>
+      ${alertBox('danger', "Africa's Talking returned <strong>InsufficientBalance (405)</strong>. No SMS can be sent until you top up.")}
+      <div class="box box-red">
+        ${dataRow('Organization', orgName)}
+        ${dataRow('Org ID', orgId, true)}
+        ${dataRow('Attempted to', attemptedTo, true)}
+        ${contentPreview ? dataRow('Content preview', contentPreview) : ''}
+        ${dataRow('AT username', atUsername || '—', true)}
+        ${dataRow('Occurred', fmtDateTime(occurredAt || new Date()))}
+      </div>
+      <div class="box">
+        <h3>Action required</h3>
+        <ol>
+          <li>Log into Africa's Talking dashboard</li>
+          <li>Top up your AT account balance</li>
+          <li>SMS sending will resume automatically — no code changes needed</li>
+        </ol>
+      </div>
+      <p class="muted">Users see a generic "temporarily unavailable" message. They are not charged for failed sends.</p>
+    `,
+  });
+}
+
 module.exports = {
   verifyEmail,
   welcome,
@@ -1120,4 +1275,11 @@ module.exports = {
   renewalInvoice,
   subscriptionFrozen,
   renewalReminder,
+    // ─── SMS ───
+  smsTopUpConfirmed,
+  smsLowBalance,
+  smsSenderApproved,
+  smsSenderRejected,
+  adminNewSmsSenderApplication,
+  adminSmsProviderDry,
 };

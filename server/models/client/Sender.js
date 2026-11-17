@@ -27,7 +27,6 @@ const senderSchema = new mongoose.Schema(
     },
     domain: String,
 
-    // ── verification (usable flag) ────────────────────────────────
     isVerified: {
       type: Boolean,
       default: false,
@@ -38,7 +37,6 @@ const senderSchema = new mongoose.Schema(
       ref: 'AdminUser',
     },
 
-    // ── admin review workflow ────────────────────────────────────
     reviewStatus: {
       type: String,
       enum: ['pending', 'approved', 'rejected'],
@@ -64,6 +62,21 @@ const senderSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    channels: {
+      type: [String],
+      enum: ['email', 'sms'],
+      default: ['email'],
+      validate: {
+        validator: (v) => Array.isArray(v) && v.length > 0,
+        message: 'At least one channel is required',
+      },
+    },
+    atRegistered: {
+      type: Date,
+      default: null,
+    },
+
     replyTo: String,
     signature: String,
   },

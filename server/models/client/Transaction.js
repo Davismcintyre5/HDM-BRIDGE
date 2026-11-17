@@ -26,7 +26,7 @@ const transactionSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['subscription', 'overage', 'refund', 'credit', 'manual'],
+      enum: ['subscription', 'overage', 'refund', 'credit', 'manual', 'sms_topup'],
       required: true,
     },
     status: {

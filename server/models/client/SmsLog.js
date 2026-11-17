@@ -17,6 +17,8 @@ const smsLogSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    atMessageId: String,
+    statusCode: Number,
     to: {
       type: String,
       required: true,
@@ -24,35 +26,33 @@ const smsLogSchema = new mongoose.Schema(
     content: {
       type: String,
       required: true,
-      maxlength: 160,
+      maxlength: 1600,
     },
-    sender: {
-      type: String,
-      default: 'HDM BRIDGE',
-    },
+    senderId: String,
     status: {
       type: String,
       enum: ['queued', 'sent', 'failed', 'delivered'],
       default: 'queued',
     },
-    creditsUsed: {
-      type: Number,
-      default: 1,
-    },
-    brevoMessageId: String,
-    error: String,
+    errorCode: String,
+    errorMessage: String,
+    rateAtSend: Number,
+    atCostKes: Number,
+    costKes: Number,
+    units: { type: Number, default: 1 },
+    balanceBefore: Number,
+    balanceAfter: Number,
     type: {
       type: String,
       enum: ['transactional', 'marketing'],
       default: 'transactional',
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 smsLogSchema.index({ organizationId: 1, createdAt: -1 });
 smsLogSchema.index({ messageId: 1 });
+smsLogSchema.index({ status: 1, createdAt: -1 });
 
 module.exports = mongoose.model('SmsLog', smsLogSchema);
