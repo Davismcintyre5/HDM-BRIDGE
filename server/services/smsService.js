@@ -15,17 +15,28 @@ const sms = AT.SMS;
 
 const AT_SUCCESS_CODES = new Set([100, 101, 102]);
 const AT_ERROR_MAP = {
-  401: { code: 'SMS_SEND_FAILED',         http: 502, message: 'SMS rejected by provider (risk hold)' },
-  402: { code: 'SMS_SENDER_INVALID',      http: 502, message: 'SMS sender is not valid with the provider' },
-  403: { code: 'SMS_RECIPIENT_INVALID',   http: 400, message: 'Invalid phone number' },
-  404: { code: 'SMS_RECIPIENT_INVALID',   http: 400, message: 'Unsupported phone number type' },
+  401: { code: 'SMS_SEND_FAILED',                   http: 502, message: 'SMS rejected by provider (risk hold)' },
+  402: { code: 'SMS_SENDER_INVALID',                http: 502, message: 'SMS sender is not valid with the provider' },
+  403: { code: 'SMS_RECIPIENT_INVALID',             http: 400, message: 'Invalid phone number' },
+  404: { code: 'SMS_RECIPIENT_INVALID',             http: 400, message: 'Unsupported phone number type' },
   405: { code: 'SMS_PROVIDER_INSUFFICIENT_BALANCE', http: 502, message: 'SMS service temporarily unavailable' },
-  406: { code: 'SMS_RECIPIENT_BLACKLISTED', http: 400, message: 'Recipient has opted out of receiving SMS' },
-  407: { code: 'SMS_ROUTE_UNAVAILABLE',    http: 502, message: 'Cannot deliver to this number' },
-  500: { code: 'SMS_SEND_FAILED',         http: 502, message: 'SMS provider error' },
-  501: { code: 'SMS_SEND_FAILED',         http: 502, message: 'SMS provider gateway error' },
-  502: { code: 'SMS_SEND_FAILED',         http: 502, message: 'SMS rejected by gateway' },
+  406: { code: 'SMS_RECIPIENT_BLACKLISTED',         http: 400, message: 'Recipient has opted out of receiving SMS' },
+  407: { code: 'SMS_ROUTE_UNAVAILABLE',             http: 502, message: 'Cannot deliver to this number' },
+  500: { code: 'SMS_SEND_FAILED',                   http: 502, message: 'SMS provider error' },
+  501: { code: 'SMS_SEND_FAILED',                   http: 502, message: 'SMS provider gateway error' },
+  502: { code: 'SMS_SEND_FAILED',                   http: 502, message: 'SMS rejected by gateway' },
 };
+
+function normalizeKenyanPhone(raw) {
+  let p = String(raw || '').replace(/[\s\-()]/g, '');
+  if (!p) return '';
+  if (p.startsWith('+')) return p;
+  if (p.startsWith('00')) return '+' + p.slice(2);
+  if (p.startsWith('254')) return '+' + p;
+  if (p.startsWith('0')) return '+254' + p.slice(1);
+  if (p.startsWith('7') || p.startsWith('1')) return '+254' + p;
+  return p;
+}
 
 function generateMessageId() {
   return 'sms_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
@@ -71,11 +82,7 @@ async function sendSms(smsData) {
   } = smsData;
 
   if (!isConfigured()) {
-    throw new AppError(
-      'SMS service is not configured',
-      503,
-      'SMS_NOT_CONFIGURED'
-    );
+    throw new AppError('SMS service is not configured', 503, 'SMS_NOT_CONFIGURED');
   }
 
   if (!to || !String(to).trim()) {
@@ -85,10 +92,10 @@ async function sendSms(smsData) {
     throw new AppError('Message content is required', 400, 'VALIDATION_001');
   }
 
-  const normalizedTo = String(to).trim();
+  const normalizedTo = normalizeKenyanPhone(to);
   if (!/^\+\d{10,15}$/.test(normalizedTo)) {
     throw new AppError(
-      'Phone number must be in E.164 format (e.g. +254712345678)',
+      'Invalid phone number. Use +254712345678 or 0712345678.',
       400,
       'SMS_RECIPIENT_INVALID'
     );
@@ -156,7 +163,6 @@ async function sendSms(smsData) {
 
   if (AT_SUCCESS_CODES.has(statusCode)) {
     const debitResult = await smsWalletService.debit(organizationId, costKes);
-
     const balanceAfter = debitResult.success ? debitResult.balance : balanceBefore;
 
     await SmsLog.create({
@@ -190,6 +196,7 @@ async function sendSms(smsData) {
         ' at=' + (atMessageId || '—') +
         ' code=' + statusCode +
         ' org=' + organizationId +
+        ' to=' + normalizedTo +
         ' cost=' + costKes
     );
 
@@ -266,4 +273,5 @@ module.exports = {
   computeUnits,
   fetchATBalance,
   generateMessageId,
+  normalizeKenyanPhone,
 };

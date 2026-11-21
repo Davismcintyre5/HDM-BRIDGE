@@ -141,9 +141,13 @@ function generatePassword(timestamp) {
 }
 
 function normalizePhone(phone) {
-    let p = String(phone).replace(/\D/g, '');
-    if (p.startsWith('0')) p = '254' + p.slice(1);
-    else if (p.startsWith('7') || p.startsWith('1')) p = '254' + p;
+    let p = String(phone || '').replace(/[\s\-()]/g, '');
+    if (!p) return '';
+    if (p.startsWith('+')) p = p.slice(1);
+    if (p.startsWith('00')) p = p.slice(2);
+    if (p.startsWith('254')) return p;
+    if (p.startsWith('0')) return '254' + p.slice(1);
+    if (p.startsWith('7') || p.startsWith('1')) return '254' + p;
     return p;
 }
 
